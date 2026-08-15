@@ -9,22 +9,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import type { Tables, TablesInsert } from "@/lib/types";
-import { goalsTable } from "./_db";
+import { supabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 const GOAL_TYPES = ["weight", "habit_streak", "activity", "custom"] as const;
 const STATUSES = ["in_corso", "raggiunto", "abbandonato"] as const;
+type GoalStatus = (typeof STATUSES)[number];
+
+function isGoalStatus(value: string): value is GoalStatus {
+  return (STATUSES as readonly string[]).includes(value);
+}
 
 export async function GET(request: NextRequest) {
   const status = request.nextUrl.searchParams.get("status");
 
-  let query = goalsTable()
+  let query = supabaseServer.from("goals")
     .select("*")
     .eq("user_id", CURRENT_USER_ID)
     .order("created_at", { ascending: false });
 
-  if (status && (STATUSES as readonly string[]).includes(status)) {
+  if (status && isGoalStatus(status)) {
     query = query.eq("status", status);
   }
 
@@ -71,7 +76,7 @@ export async function POST(request: NextRequest) {
     status: "in_corso",
   };
 
-  const { data, error } = await goalsTable()
+  const { data, error } = await supabaseServer.from("goals")
     .insert(payload)
     .select("*")
     .single();

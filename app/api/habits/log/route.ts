@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import type { Tables } from "@/lib/types";
-import { habitLogsTable, habitsTable } from "../_db";
+import { supabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ function todayISODate() {
 export async function GET(request: NextRequest) {
   const date = request.nextUrl.searchParams.get("date") ?? todayISODate();
 
-  const { data, error } = await habitLogsTable()
+  const { data, error } = await supabaseServer.from("habit_logs")
     .select("*")
     .eq("user_id", CURRENT_USER_ID)
     .eq("recorded_at", date);
@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
 
   // Verifica che l'abitudine appartenga all'utente corrente e
   // recupera type/target_value per derivare 'completed' se sensato.
-  const { data: habitData, error: habitError } = await habitsTable()
+  const { data: habitData, error: habitError } = await supabaseServer.from("habits")
     .select("id, type, target_value")
     .eq("id", body.habit_id)
     .eq("user_id", CURRENT_USER_ID)
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const { data, error } = await habitLogsTable()
+  const { data, error } = await supabaseServer.from("habit_logs")
     .upsert(
       {
         habit_id: habit.id,

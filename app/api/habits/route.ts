@@ -9,14 +9,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import type { Tables, TablesInsert } from "@/lib/types";
-import { habitsTable } from "./_db";
+import { supabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const activeParam = request.nextUrl.searchParams.get("active");
 
-  let query = habitsTable()
+  let query = supabaseServer.from("habits")
     .select("*")
     .eq("user_id", CURRENT_USER_ID)
     .order("created_at", { ascending: true });
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     is_active: body.is_active ?? true,
   };
 
-  const { data, error } = await habitsTable()
+  const { data, error } = await supabaseServer.from("habits")
     .insert(payload)
     .select("*")
     .single();

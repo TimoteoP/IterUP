@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import type { Tables, TablesUpdate } from "@/lib/types";
-import { habitsTable } from "../_db";
+import { supabaseServer } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +50,7 @@ export async function PATCH(
     );
   }
 
-  const { data, error } = await habitsTable()
+  const { data, error } = await supabaseServer.from("habits")
     .update(update)
     .eq("id", params.id)
     .eq("user_id", CURRENT_USER_ID)
@@ -68,7 +68,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { error } = await habitsTable()
+  const { error } = await supabaseServer.from("habits")
     .delete()
     .eq("id", params.id)
     .eq("user_id", CURRENT_USER_ID);
