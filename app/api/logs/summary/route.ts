@@ -15,7 +15,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { typedSupabase } from "../typed-client";
 import { CURRENT_USER_ID } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +30,8 @@ export type MacroTotals = {
   fat_g: number;
 };
 
-// Vedi nota in app/api/logs/route.ts: `lib/types.ts` non ha metadati
-// di relazione, quindi l'embed `foods(...)` va ritipizzato a mano.
+// Vedi nota in app/api/logs/route.ts: `Relationships` è dichiarato
+// vuoto per ogni tabella, quindi l'embed `foods(...)` va ritipizzato a mano.
 type LogForSummaryRow = {
   quantity_g: number;
   foods: {
@@ -55,7 +54,7 @@ export async function GET(request: NextRequest) {
       .eq("user_id", CURRENT_USER_ID)
       .eq("logged_at", date)
       .returns<LogForSummaryRow[]>(),
-    typedSupabase
+    supabaseServer
       .from("user_targets")
       .select("id, mode, daily_kcal, protein_g, carbs_g, fat_g, created_at")
       .eq("user_id", CURRENT_USER_ID)

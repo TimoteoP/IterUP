@@ -14,7 +14,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
-import { typedSupabase } from "./typed-client";
 import { CURRENT_USER_ID } from "@/lib/config";
 import type { TablesInsert } from "@/lib/types";
 
@@ -45,11 +44,10 @@ export type LogWithMacros = {
   fat_g: number;
 };
 
-// `lib/types.ts` è scritto a mano e non include i metadati di
-// relazione ("Relationships") che `supabase gen types` genererebbe
-// normalmente: senza di essi il client tipizza l'embed `foods(...)`
-// come `never`. Dichiariamo qui la forma reale della riga restituita
-// da Postgres e la applichiamo con `.returns<...>()`.
+// `lib/types.ts` dichiara `Relationships: []` per ogni tabella (nessuna
+// FK descritta), quindi il client non può inferire da solo la forma
+// dell'embed `foods(...)`. Dichiariamo qui la forma reale della riga
+// restituita da Postgres e la applichiamo con `.returns<...>()`.
 type DailyLogRow = {
   id: string;
   food_id: string;
@@ -148,7 +146,7 @@ export async function POST(request: NextRequest) {
     ...(logged_at ? { logged_at } : {}),
   };
 
-  const { data, error } = await typedSupabase
+  const { data, error } = await supabaseServer
     .from("daily_logs")
     .insert([insertPayload])
     .select("id, food_id, quantity_g, meal_type, logged_at, created_at")
