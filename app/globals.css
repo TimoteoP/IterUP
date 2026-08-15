@@ -2,26 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Variabili CSS di base per lo shell dell'app.
+ *
+ * I valori qui sotto devono restare sincronizzati con lib/design-tokens.ts
+ * (contratto condiviso congelato dopo la Fase 0, vedi CLAUDE.md regola 2):
+ * questo file non introduce colori nuovi, si limita a esporre --background
+ * e --foreground (già usati da tailwind.config.ts per le utility
+ * `bg-background` / `text-foreground`) coerenti con colors.background e
+ * colors.textPrimary. IterUp è dark-only, niente switch light/dark.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  color-scheme: dark;
+  --background: #0b0d10; /* colors.background */
+  --foreground: #f5f6f7; /* colors.textPrimary */
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--background);
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+  min-height: 100dvh;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Padding per la bottom nav che rispetta la safe-area di iOS
+     (notch / home indicator) quando l'app è installata da Safari. */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
