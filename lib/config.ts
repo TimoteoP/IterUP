@@ -9,4 +9,4 @@
 // (vedi fondo di /schema.sql), poi impostalo anche come
 // CURRENT_USER_ID in .env.local se preferisci non hardcodarlo.
 export const CURRENT_USER_ID =
-  process.env.CURRENT_USER_ID ?? "00000000-0000-0000-0000-000000000000";
+  process.env.CURRENT_USER_ID || "00000000-0000-0000-0000-000000000000";

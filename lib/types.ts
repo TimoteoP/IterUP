@@ -73,6 +73,7 @@ export interface Database {
           created_at?: string | null;
           updated_at?: string | null;
         };
+        Relationships: [];
       };
       user_targets: {
         Row: {
@@ -108,6 +109,7 @@ export interface Database {
           is_active?: boolean | null;
           created_at?: string | null;
         };
+        Relationships: [];
       };
       foods: {
         Row: {
@@ -149,6 +151,7 @@ export interface Database {
           source_id?: string | null;
           created_at?: string | null;
         };
+        Relationships: [];
       };
       daily_logs: {
         Row: {
@@ -178,6 +181,7 @@ export interface Database {
           logged_at?: string;
           created_at?: string | null;
         };
+        Relationships: [];
       };
       body_metrics: {
         Row: {
@@ -213,6 +217,7 @@ export interface Database {
           thigh_cm?: number | null;
           created_at?: string | null;
         };
+        Relationships: [];
       };
       activity_logs: {
         Row: {
@@ -248,6 +253,7 @@ export interface Database {
           calories_burned?: number | null;
           created_at?: string | null;
         };
+        Relationships: [];
       };
       habits: {
         Row: {
@@ -280,6 +286,7 @@ export interface Database {
           is_active?: boolean | null;
           created_at?: string | null;
         };
+        Relationships: [];
       };
       habit_logs: {
         Row: {
@@ -309,6 +316,7 @@ export interface Database {
           value?: number | null;
           created_at?: string | null;
         };
+        Relationships: [];
       };
       goals: {
         Row: {
@@ -344,6 +352,7 @@ export interface Database {
           created_at?: string | null;
           completed_at?: string | null;
         };
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
