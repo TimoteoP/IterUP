@@ -62,22 +62,8 @@ export async function POST(request: NextRequest) {
 
   // Upsert: rispetta il vincolo unique(user_id, recorded_at). Se esiste già
   // una misurazione per questa data la sovrascrive invece di fallire.
-  //
-  // NOTA: il cast a `any` sul builder qui sotto è un workaround mirato per un
-  // problema di compatibilità tra /lib/types.ts (contratto congelato, non
-  // modificabile da questo modulo) e la versione installata di
-  // @supabase/supabase-js (2.112.3): il postgrest-js sottostante richiede che
-  // ogni tabella in Database["public"]["Tables"] includa un campo
-  // `Relationships: GenericRelationship[]`, assente nel nostro lib/types.ts.
-  // Questo fa collassare a `never` l'inferenza dei tipi per QUALSIASI
-  // .insert()/.upsert() su QUALSIASI tabella in tutto il progetto (non solo
-  // qui) — segnalato al supervisore, va risolto a livello di contratto
-  // condiviso (aggiungere `Relationships: []` a ogni tabella in
-  // lib/types.ts, oppure pinnare una versione di @supabase/supabase-js
-  // compatibile con lo schema attuale). Il payload resta comunque validato
-  // a runtime da validateBodyMetricsPayload() sopra.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabaseServer.from("body_metrics") as any)
+  const { data, error } = await supabaseServer
+    .from("body_metrics")
     .upsert([payload], { onConflict: "user_id,recorded_at" })
     .select()
     .single();
