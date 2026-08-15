@@ -24,20 +24,6 @@ import {
 
 export const dynamic = "force-dynamic";
 
-// NOTA IMPORTANTE PER IL SUPERVISORE:
-// Le tabelle in /lib/types.ts (frozen, non modificabile da questo modulo)
-// non includono il campo `Relationships` che @supabase/supabase-js 2.112.x
-// richiede per il generic `GenericTable` usato da .insert()/.update()/.upsert().
-// Senza quel campo, TypeScript risolve i generics di Insert/Update a `never`
-// e ogni chiamata di scrittura tipata fallisce in build con
-// "Object literal may only specify known properties, and 'x' does not
-// exist in type 'never[]'". Finché lib/types.ts non viene rigenerato con
-// `Relationships: []` per ogni tabella, i payload di scrittura vanno
-// castati esplicitamente (vedi `as never` sotto) per bypassare il generic
-// rotto — la validazione a runtime resta comunque quella fatta sopra.
-// Questo problema riguarda probabilmente TUTTI i moduli che scrivono su DB
-// (A2, A4, A5, A6), non solo l'onboarding.
-
 const VALID_SEXES: Sex[] = ["m", "f"];
 const VALID_ACTIVITY_LEVELS: ActivityLevel[] = [
   "sedentario",
@@ -151,7 +137,7 @@ export async function POST(request: Request) {
         height_cm: heightCm,
         activity_level: activityLevel,
         updated_at: new Date().toISOString(),
-      } as never,
+      },
       { onConflict: "id" }
     );
 
@@ -170,7 +156,7 @@ export async function POST(request: Request) {
         user_id: CURRENT_USER_ID,
         recorded_at: today,
         weight_kg: weightKg,
-      } as never,
+      },
       { onConflict: "user_id,recorded_at" }
     );
 
@@ -194,7 +180,7 @@ export async function POST(request: Request) {
   // 4. disattiva i target precedenti, poi inserisce il nuovo target attivo
   const { error: deactivateError } = await supabaseServer
     .from("user_targets")
-    .update({ is_active: false } as never)
+    .update({ is_active: false })
     .eq("user_id", CURRENT_USER_ID)
     .eq("is_active", true);
 
@@ -215,7 +201,7 @@ export async function POST(request: Request) {
       carbs_g: tdeeResult.carbsG,
       fat_g: tdeeResult.fatG,
       is_active: true,
-    } as never)
+    })
     .select()
     .single();
 
