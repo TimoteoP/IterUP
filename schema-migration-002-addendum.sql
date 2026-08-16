@@ -15,12 +15,15 @@ alter table public.profiles
 
 -- 2. user_targets: mode passa da (loss, maintain, gain) a una lista
 --    aperta di tipi di dieta scelti direttamente dall'utente.
---    Rimappa i valori esistenti prima di stringere il constraint.
+--    Il vecchio constraint va rimosso PRIMA di rimappare i valori
+--    esistenti, altrimenti l'UPDATE stesso lo viola (i nuovi valori
+--    non sono ancora ammessi finché il vecchio constraint è attivo).
+alter table public.user_targets drop constraint if exists user_targets_mode_check;
+
 update public.user_targets set mode = 'dimagrimento' where mode = 'loss';
 update public.user_targets set mode = 'mantenimento' where mode = 'maintain';
 update public.user_targets set mode = 'costruzione_muscolare' where mode = 'gain';
 
-alter table public.user_targets drop constraint if exists user_targets_mode_check;
 alter table public.user_targets
   add constraint user_targets_mode_check
   check (mode in ('dimagrimento', 'mantenimento', 'costruzione_muscolare', 'recupero'));
