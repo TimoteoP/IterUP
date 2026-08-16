@@ -27,4 +27,14 @@ export const supabaseServer = createClient<Database>(supabaseUrl, serviceRoleKey
     autoRefreshToken: false,
     persistSession: false,
   },
+  global: {
+    // Next.js patcha il `fetch` globale e mette in cache le richieste per
+    // URL, anche nelle route handler con `dynamic = "force-dynamic"` (quel
+    // flag disabilita il rendering statico della route, non la Data Cache
+    // dei singoli fetch). Senza questo, due chiamate a supabase-js con la
+    // stessa select/filtro possono restituire una risposta cachata stale
+    // invece di leggere lo stato reale del DB. `cache: "no-store"` disattiva
+    // la Data Cache di Next per ogni richiesta fatta da questo client.
+    fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+  },
 });
