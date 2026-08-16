@@ -18,14 +18,33 @@ export const DIET_MODES = [
 
 export type DietMode = (typeof DIET_MODES)[number]["value"];
 
-export const DIETARY_REGIMES = [
+// Preset noti, mostrati come suggerimenti nella UI (vedi
+// app/impostazioni/ProfileForm.tsx): lista aperta, l'utente può
+// aggiungerne altri liberamente da UI (nessun CHECK in DB su questo
+// campo, vedi schema.sql). Non hardcodare regimi altrove: chi ha
+// bisogno della label per un valore custom non presente qui deve
+// mostrare il valore stesso (vedi dietaryRegimeLabel sotto).
+export const DIETARY_REGIME_PRESETS = [
   { value: "mediterraneo", label: "Mediterraneo" },
   { value: "keto", label: "Keto" },
   { value: "paleo", label: "Paleo" },
   { value: "high_carb", label: "High-carb" },
+  { value: "vegano", label: "Vegano" },
+  { value: "vegetariano", label: "Vegetariano" },
+  { value: "fruttariano", label: "Fruttariano" },
+  { value: "crudista", label: "Crudista" },
+  { value: "low_carb", label: "Low-carb" },
+  { value: "chetogenica_ciclica", label: "Chetogenica ciclica" },
 ] as const;
 
-export type DietaryRegime = (typeof DIETARY_REGIMES)[number]["value"];
+// Regime alimentare: stringa libera (non enum chiuso), vedi
+// PRD-addendum-onboarding-form.md sezione 2.2 ("lista estendibile").
+export type DietaryRegime = string;
+
+/** Etichetta leggibile per un regime: usa il preset se noto, altrimenti il valore stesso. */
+export function dietaryRegimeLabel(value: string): string {
+  return DIETARY_REGIME_PRESETS.find((r) => r.value === value)?.label ?? value;
+}
 
 export const MEAL_TYPES = [
   { value: "colazione", label: "Colazione" },
@@ -52,6 +71,13 @@ export function isDietMode(value: unknown): value is DietMode {
   return typeof value === "string" && DIET_MODES.some((m) => m.value === value);
 }
 
+const DIETARY_REGIME_MAX_LENGTH = 40;
+
+/** Valida un regime alimentare libero: stringa non vuota, lunghezza ragionevole. */
 export function isDietaryRegime(value: unknown): value is DietaryRegime {
-  return typeof value === "string" && DIETARY_REGIMES.some((r) => r.value === value);
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.trim().length <= DIETARY_REGIME_MAX_LENGTH
+  );
 }

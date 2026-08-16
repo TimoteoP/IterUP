@@ -12,7 +12,6 @@ export interface NavLink {
 }
 
 export const NAV_LINKS: NavLink[] = [
-  { href: "/onboarding", label: "Onboarding", icon: "👋" },
   { href: "/diario", label: "Diario", icon: "🍽️" },
   { href: "/misure", label: "Misure", icon: "📏" },
   { href: "/abitudini", label: "Abitudini", icon: "✅" },

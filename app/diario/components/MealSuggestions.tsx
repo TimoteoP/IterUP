@@ -47,6 +47,7 @@ export default function MealSuggestions({ mealType, logDate, onLogged }: MealSug
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<SuggestResponse | null>(null);
   const [addingIndex, setAddingIndex] = useState<number | null>(null);
+  const [votedIndexes, setVotedIndexes] = useState<Record<number, boolean>>({});
 
   async function generate() {
     setOpen(true);
@@ -96,6 +97,19 @@ export default function MealSuggestions({ mealType, logDate, onLogged }: MealSug
       setError(err instanceof Error ? err.message : "Errore sconosciuto");
     } finally {
       setAddingIndex(null);
+    }
+  }
+
+  async function vote(proposal: ValidatedProposal, index: number, liked: boolean) {
+    setVotedIndexes((prev) => ({ ...prev, [index]: liked }));
+    try {
+      await fetch("/api/suggest-meal/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mealType, modelUsed: data?.modelUsed ?? null, proposal, liked }),
+      });
+    } catch {
+      // Il voto è un feedback opzionale, non blocchiamo l'utente se fallisce.
     }
   }
 
@@ -182,6 +196,32 @@ export default function MealSuggestions({ mealType, logDate, onLogged }: MealSug
                 · G {p.macro.grassi_g}g
                 {p.note_regime ? ` · ${p.note_regime}` : ""}
               </p>
+
+              <div className="flex items-center" style={{ gap: spacing.xs, marginTop: spacing.xs }}>
+                {votedIndexes[i] !== undefined ? (
+                  <span style={{ fontSize: font.size.xs, color: colors.textMuted }}>
+                    Grazie per il feedback {votedIndexes[i] ? "👍" : "👎"}
+                  </span>
+                ) : (
+                  <>
+                    <span style={{ fontSize: font.size.xs, color: colors.textMuted }}>Ti piace?</span>
+                    <button
+                      onClick={() => vote(p, i, true)}
+                      aria-label="Proposta apprezzata"
+                      style={{ fontSize: font.size.sm }}
+                    >
+                      👍
+                    </button>
+                    <button
+                      onClick={() => vote(p, i, false)}
+                      aria-label="Proposta non apprezzata"
+                      style={{ fontSize: font.size.sm }}
+                    >
+                      👎
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
           ))}
         </div>

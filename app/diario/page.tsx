@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import MacroProgressBar from "./MacroProgressBar";
 import MealSuggestions from "./components/MealSuggestions";
+import AddFoodForm from "./components/AddFoodForm";
 import { MEAL_TYPES_WITHOUT_FOOD } from "@/lib/nutrition-options";
 import {
   MEAL_TYPES,
@@ -70,6 +71,7 @@ export default function DiarioPage() {
   const [mealType, setMealType] = useState<MealType>(inferMealType());
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [showAddFood, setShowAddFood] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoadingLogs(true);
@@ -131,6 +133,11 @@ export default function DiarioPage() {
     setQuery("");
     setQuantity("100");
     setAddError(null);
+  }
+
+  function handleFoodCreated(food: FoodResult) {
+    setShowAddFood(false);
+    handleSelectFood(food);
   }
 
   async function handleAdd() {
@@ -434,15 +441,18 @@ export default function DiarioPage() {
                   </p>
                 )}
                 {!searching && results.length === 0 && (
-                  <p
-                    style={{
-                      padding: spacing.sm,
-                      color: colors.textMuted,
-                      fontSize: font.size.sm,
-                    }}
-                  >
-                    Nessun alimento trovato.
-                  </p>
+                  <div style={{ padding: spacing.sm, display: "flex", flexDirection: "column", gap: spacing.xs }}>
+                    <p style={{ color: colors.textMuted, fontSize: font.size.sm }}>
+                      Nessun alimento trovato.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddFood(true)}
+                      style={{ color: colors.accent, fontSize: font.size.sm, textAlign: "left" }}
+                    >
+                      + Aggiungi &quot;{query.trim()}&quot; come nuovo alimento
+                    </button>
+                  </div>
                 )}
                 {!searching &&
                   results.map((food) => (
@@ -465,6 +475,28 @@ export default function DiarioPage() {
                     </button>
                   ))}
               </div>
+            )}
+
+            {!showAddFood && !selectedFood && (
+              <button
+                type="button"
+                onClick={() => setShowAddFood(true)}
+                style={{
+                  alignSelf: "flex-start",
+                  color: colors.textMuted,
+                  fontSize: font.size.xs,
+                }}
+              >
+                Non trovi l&apos;alimento? Aggiungilo al database
+              </button>
+            )}
+
+            {showAddFood && (
+              <AddFoodForm
+                initialName={query.trim()}
+                onCreated={handleFoodCreated}
+                onCancel={() => setShowAddFood(false)}
+              />
             )}
           </div>
 

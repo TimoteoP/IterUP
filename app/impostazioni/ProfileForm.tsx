@@ -1,13 +1,13 @@
 "use client";
 
 // ============================================================
-// IterUp — form profilo condiviso (Onboarding + Impostazioni)
+// IterUp — form profilo (Impostazioni)
 // ------------------------------------------------------------
-// Usato sia al primo avvio (app/onboarding/page.tsx, senza dati
-// precompilati) sia per la modifica successiva (app/impostazioni/
-// page.tsx, con initialValues): l'addendum vieta esplicitamente di
-// trattare questi dati come one-shot immutabile (vedi
-// PRD-addendum-onboarding-form.md sezione 1 e 6).
+// Usato sia al primo avvio (nessun profilo esistente ancora, form
+// vuoto) sia per la modifica successiva (precompilato): non è un
+// one-shot immutabile, non esiste più una pagina di onboarding
+// separata (era ridondante con questa) — vedi
+// PRD-addendum-onboarding-form.md sezione 1 e 6.
 // ============================================================
 
 import { useState, type FormEvent } from "react";
@@ -22,7 +22,7 @@ import {
   type GoalMode,
   type Sex,
 } from "@/lib/tdee";
-import { DIET_MODES, DIETARY_REGIMES, type DietaryRegime } from "@/lib/nutrition-options";
+import { DIET_MODES, DIETARY_REGIME_PRESETS, type DietaryRegime } from "@/lib/nutrition-options";
 import TagListInput from "./TagListInput";
 
 export interface ProfileFormState {
@@ -117,6 +117,8 @@ export default function ProfileForm({
   const [form, setForm] = useState<ProfileFormState>(initialValues ?? PROFILE_FORM_INITIAL_STATE);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [addingRegime, setAddingRegime] = useState(false);
+  const [customRegimeDraft, setCustomRegimeDraft] = useState("");
 
   function update<K extends keyof ProfileFormState>(key: K, value: ProfileFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -134,7 +136,7 @@ export default function ProfileForm({
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/onboarding/save", {
+      const res = await fetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -330,19 +332,61 @@ export default function ProfileForm({
         <label style={labelStyle} htmlFor="dietaryRegime">
           Regime alimentare
         </label>
-        <select
-          id="dietaryRegime"
-          style={inputStyle}
-          value={form.dietaryRegime}
-          onChange={(e) => update("dietaryRegime", e.target.value as DietaryRegime)}
-          required
-        >
-          {DIETARY_REGIMES.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        {addingRegime ? (
+          <div style={{ display: "flex", gap: spacing.xs }}>
+            <input
+              type="text"
+              autoFocus
+              style={inputStyle}
+              value={customRegimeDraft}
+              onChange={(e) => setCustomRegimeDraft(e.target.value)}
+              placeholder="Es. pescetariano, low-fodmap..."
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const value = customRegimeDraft.trim();
+                if (value) update("dietaryRegime", value as DietaryRegime);
+                setAddingRegime(false);
+                setCustomRegimeDraft("");
+              }}
+              style={{
+                backgroundColor: colors.surfaceAlt,
+                border: `1px solid ${colors.border}`,
+                borderRadius: radius.md,
+                padding: `${spacing.sm} ${spacing.md}`,
+                color: colors.textPrimary,
+                fontSize: font.size.sm,
+                whiteSpace: "nowrap",
+              }}
+            >
+              Aggiungi
+            </button>
+          </div>
+        ) : (
+          <select
+            id="dietaryRegime"
+            style={inputStyle}
+            value={form.dietaryRegime}
+            onChange={(e) => {
+              if (e.target.value === "__custom__") {
+                setAddingRegime(true);
+              } else {
+                update("dietaryRegime", e.target.value as DietaryRegime);
+              }
+            }}
+            required
+          >
+            {DIETARY_REGIME_PRESETS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+            {!DIETARY_REGIME_PRESETS.some((opt) => opt.value === form.dietaryRegime) &&
+              form.dietaryRegime && <option value={form.dietaryRegime}>{form.dietaryRegime}</option>}
+            <option value="__custom__">+ Aggiungi nuovo regime...</option>
+          </select>
+        )}
       </div>
 
       <div>

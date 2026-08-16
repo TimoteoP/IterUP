@@ -24,10 +24,11 @@ create table if not exists public.profiles (
   birth_date date,
   height_cm numeric,
   activity_level text check (activity_level in ('sedentario', 'leggero', 'moderato', 'attivo', 'molto_attivo')),
-  -- Regime alimentare: lista aperta, tenuta in un unico posto anche
-  -- lato codice (vedi /lib/nutrition-options.ts) invece che sparsa nel
-  -- codice — vedi PRD-addendum-onboarding-form.md sezione 2.2.
-  dietary_regime text check (dietary_regime in ('mediterraneo', 'keto', 'paleo', 'high_carb')) default 'mediterraneo',
+  -- Regime alimentare: lista aperta (mediterraneo, keto, vegano,
+  -- vegetariano, ... e nuovi valori creati liberamente dall'utente
+  -- dalla UI) — nessun CHECK, i preset noti vivono solo lato codice
+  -- in /lib/nutrition-options.ts, non nello schema.
+  dietary_regime text default 'mediterraneo',
   -- Vincolo HARD per il generatore AI: mai proporre pasti con questi ingredienti.
   allergies text[] not null default '{}',
   -- Vincolo SOFT: preferenze di gusto, orientano ma non bloccano.
@@ -204,6 +205,32 @@ create table if not exists public.supplements (
 
 create index if not exists idx_supplements_user on public.supplements(user_id);
 
+-- ------------------------------------------------------------
+-- 11. VALUTAZIONI PROPOSTE PASTO AI (A3)
+-- ------------------------------------------------------------
+-- `proposal` è uno snapshot jsonb dell'intera proposta valutata
+-- (nome/ingredienti/macro): la proposta potrebbe non essere mai stata
+-- aggiunta al diario, quindi non può essere un riferimento a
+-- daily_logs. Serve a tracciare la qualità percepita nel tempo.
+create table if not exists public.meal_suggestion_feedback (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  meal_type text not null,
+  model_used text,
+  proposal jsonb not null,
+  liked boolean not null,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_meal_feedback_user on public.meal_suggestion_feedback(user_id);
+
+-- ------------------------------------------------------------
+-- 12. ALIMENTI AGGIUNTI MANUALMENTE
+-- ------------------------------------------------------------
+-- Nessuna tabella separata: le voci create dall'utente da UI (vedi
+-- app/api/foods/route.ts) vanno semplicemente in `foods` con
+-- source = 'manual' invece di 'usda', per distinguerle nello storico.
+
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- ------------------------------------------------------------
@@ -221,8 +248,10 @@ alter table public.habit_logs enable row level security;
 alter table public.goals enable row level security;
 alter table public.foods enable row level security;
 alter table public.supplements enable row level security;
+alter table public.meal_suggestion_feedback enable row level security;
 
 create policy "foods_read_all" on public.foods for select using (true);
+create policy "foods_insert_all" on public.foods for insert with check (true);
 create policy "profiles_own" on public.profiles for all using (auth.uid() = id);
 create policy "user_targets_own" on public.user_targets for all using (auth.uid() = user_id);
 create policy "daily_logs_own" on public.daily_logs for all using (auth.uid() = user_id);
@@ -232,6 +261,7 @@ create policy "habits_own" on public.habits for all using (auth.uid() = user_id)
 create policy "habit_logs_own" on public.habit_logs for all using (auth.uid() = user_id);
 create policy "goals_own" on public.goals for all using (auth.uid() = user_id);
 create policy "supplements_own" on public.supplements for all using (auth.uid() = user_id);
+create policy "meal_suggestion_feedback_own" on public.meal_suggestion_feedback for all using (auth.uid() = user_id);
 
 -- ------------------------------------------------------------
 -- Setup una tantum: crea l'unico utente fisso dell'app

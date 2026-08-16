@@ -38,7 +38,7 @@ export interface Database {
             | "attivo"
             | "molto_attivo"
             | null;
-          dietary_regime: "mediterraneo" | "keto" | "paleo" | "high_carb" | null;
+          dietary_regime: string | null;
           allergies: string[];
           preferences: string[];
           created_at: string | null;
@@ -57,7 +57,7 @@ export interface Database {
             | "attivo"
             | "molto_attivo"
             | null;
-          dietary_regime?: "mediterraneo" | "keto" | "paleo" | "high_carb" | null;
+          dietary_regime?: string | null;
           allergies?: string[];
           preferences?: string[];
           created_at?: string | null;
@@ -76,7 +76,7 @@ export interface Database {
             | "attivo"
             | "molto_attivo"
             | null;
-          dietary_regime?: "mediterraneo" | "keto" | "paleo" | "high_carb" | null;
+          dietary_regime?: string | null;
           allergies?: string[];
           preferences?: string[];
           created_at?: string | null;
@@ -422,6 +422,36 @@ export interface Database {
           dosage?: string | null;
           unit?: string | null;
           note?: string | null;
+          created_at?: string | null;
+        };
+        Relationships: [];
+      };
+      meal_suggestion_feedback: {
+        Row: {
+          id: string;
+          user_id: string;
+          meal_type: string;
+          model_used: string | null;
+          proposal: Json;
+          liked: boolean;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          meal_type: string;
+          model_used?: string | null;
+          proposal: Json;
+          liked: boolean;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          meal_type?: string;
+          model_used?: string | null;
+          proposal?: Json;
+          liked?: boolean;
           created_at?: string | null;
         };
         Relationships: [];

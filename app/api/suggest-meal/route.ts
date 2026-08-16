@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import { callOpenRouterJSON } from "@/lib/openrouter";
-import { DIETARY_REGIMES, DIET_MODES, type MealType } from "@/lib/nutrition-options";
+import { DIET_MODES, dietaryRegimeLabel, type MealType } from "@/lib/nutrition-options";
 
 export const dynamic = "force-dynamic";
 
@@ -189,9 +189,7 @@ export async function POST(request: NextRequest) {
   const targetFat = Math.round(target.fat_g * share);
 
   const modeLabel = DIET_MODES.find((m) => m.value === target.mode)?.label ?? target.mode;
-  const regimeLabel =
-    DIETARY_REGIMES.find((r) => r.value === profileResult.data?.dietary_regime)?.label ??
-    "Mediterraneo";
+  const regimeLabel = dietaryRegimeLabel(profileResult.data?.dietary_regime ?? "mediterraneo");
   const mealTypeLabel = meal;
   const allergies = profileResult.data?.allergies ?? [];
   const preferences = profileResult.data?.preferences ?? [];

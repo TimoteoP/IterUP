@@ -11,5 +11,5 @@ export default async function Home() {
     .eq("id", CURRENT_USER_ID)
     .maybeSingle();
 
-  redirect(profile ? "/diario" : "/onboarding");
+  redirect(profile ? "/diario" : "/impostazioni");
 }
