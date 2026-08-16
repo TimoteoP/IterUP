@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import MacroProgressBar from "./MacroProgressBar";
+import MealSuggestions from "./components/MealSuggestions";
 import { MEAL_TYPES_WITHOUT_FOOD } from "@/lib/nutrition-options";
 import {
   MEAL_TYPES,
@@ -362,6 +363,35 @@ export default function DiarioPage() {
             </button>
           </div>
 
+          <div className="flex items-end" style={{ gap: spacing.md, marginBottom: spacing.md }}>
+            <label className="flex flex-col" style={{ gap: spacing.xs, flex: 1 }}>
+              <span style={{ fontSize: font.size.xs, color: colors.textSecondary }}>Pasto</span>
+              <select
+                value={mealType}
+                onChange={(e) => setMealType(e.target.value as MealType)}
+                style={{
+                  backgroundColor: colors.surfaceAlt,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: radius.md,
+                  padding: `${spacing.sm} ${spacing.md}`,
+                  color: colors.textPrimary,
+                  fontSize: font.size.sm,
+                }}
+              >
+                {FOOD_MEAL_TYPES.map((mt) => (
+                  <option key={mt} value={mt}>
+                    {MEAL_LABELS[mt]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <MealSuggestions
+              mealType={mealType as "colazione" | "pranzo" | "cena" | "spuntino"}
+              logDate={date}
+              onLogged={refresh}
+            />
+          </div>
+
           <div className="relative flex flex-col" style={{ gap: spacing.sm }}>
             <input
               type="text"
@@ -460,51 +490,25 @@ export default function DiarioPage() {
                 </button>
               </div>
 
-              <div className="flex items-end" style={{ gap: spacing.md }}>
-                <label className="flex flex-col" style={{ gap: spacing.xs, flex: 1 }}>
-                  <span style={{ fontSize: font.size.xs, color: colors.textSecondary }}>
-                    Quantità (g)
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
-                    style={{
-                      backgroundColor: colors.surfaceAlt,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: radius.md,
-                      padding: `${spacing.sm} ${spacing.md}`,
-                      color: colors.textPrimary,
-                      fontSize: font.size.md,
-                    }}
-                  />
-                </label>
-
-                <label className="flex flex-col" style={{ gap: spacing.xs, flex: 1 }}>
-                  <span style={{ fontSize: font.size.xs, color: colors.textSecondary }}>
-                    Pasto
-                  </span>
-                  <select
-                    value={mealType}
-                    onChange={(e) => setMealType(e.target.value as MealType)}
-                    style={{
-                      backgroundColor: colors.surfaceAlt,
-                      border: `1px solid ${colors.border}`,
-                      borderRadius: radius.md,
-                      padding: `${spacing.sm} ${spacing.md}`,
-                      color: colors.textPrimary,
-                      fontSize: font.size.md,
-                    }}
-                  >
-                    {FOOD_MEAL_TYPES.map((mt) => (
-                      <option key={mt} value={mt}>
-                        {MEAL_LABELS[mt]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
+              <label className="flex flex-col" style={{ gap: spacing.xs }}>
+                <span style={{ fontSize: font.size.xs, color: colors.textSecondary }}>
+                  Quantità (g)
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  style={{
+                    backgroundColor: colors.surfaceAlt,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: radius.md,
+                    padding: `${spacing.sm} ${spacing.md}`,
+                    color: colors.textPrimary,
+                    fontSize: font.size.md,
+                  }}
+                />
+              </label>
 
               {previewMacros && (
                 <p style={{ fontSize: font.size.xs, color: colors.textMuted }}>
