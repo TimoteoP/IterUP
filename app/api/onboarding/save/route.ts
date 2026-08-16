@@ -21,6 +21,7 @@ import {
   type ActivityLevel,
   type GoalMode,
 } from "@/lib/tdee";
+import { isDietMode, isDietaryRegime, type DietaryRegime } from "@/lib/nutrition-options";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,14 @@ const VALID_ACTIVITY_LEVELS: ActivityLevel[] = [
   "attivo",
   "molto_attivo",
 ];
-const VALID_MODES: GoalMode[] = ["loss", "maintain", "gain"];
+
+function isStringArray(v: unknown): v is string[] {
+  return Array.isArray(v) && v.every((x) => typeof x === "string");
+}
+
+function cleanStringList(v: string[]): string[] {
+  return v.map((s) => s.trim()).filter(Boolean);
+}
 
 interface OnboardingPayload {
   fullName: string;
@@ -42,6 +50,9 @@ interface OnboardingPayload {
   weightKg: number;
   activityLevel: ActivityLevel;
   mode: GoalMode;
+  dietaryRegime: DietaryRegime;
+  allergies: string[];
+  preferences: string[];
 }
 
 function isFiniteNumber(v: unknown): v is number {
@@ -98,13 +109,32 @@ function validatePayload(body: unknown): { data: OnboardingPayload } | { error: 
   }
   const activityLevel = b.activityLevel as ActivityLevel;
 
-  if (typeof b.mode !== "string" || !VALID_MODES.includes(b.mode as GoalMode)) {
-    return { error: "Obiettivo non valido." };
+  if (!isDietMode(b.mode)) {
+    return { error: "Tipo di dieta non valido." };
   }
-  const mode = b.mode as GoalMode;
+  const mode = b.mode;
+
+  if (!isDietaryRegime(b.dietaryRegime)) {
+    return { error: "Regime alimentare non valido." };
+  }
+  const dietaryRegime = b.dietaryRegime;
+
+  const allergies = isStringArray(b.allergies) ? cleanStringList(b.allergies) : [];
+  const preferences = isStringArray(b.preferences) ? cleanStringList(b.preferences) : [];
 
   return {
-    data: { fullName, sex, birthDate, heightCm, weightKg, activityLevel, mode },
+    data: {
+      fullName,
+      sex,
+      birthDate,
+      heightCm,
+      weightKg,
+      activityLevel,
+      mode,
+      dietaryRegime,
+      allergies,
+      preferences,
+    },
   };
 }
 
@@ -120,7 +150,18 @@ export async function POST(request: Request) {
   if ("error" in validation) {
     return NextResponse.json({ error: validation.error }, { status: 400 });
   }
-  const { fullName, sex, birthDate, heightCm, weightKg, activityLevel, mode } = validation.data;
+  const {
+    fullName,
+    sex,
+    birthDate,
+    heightCm,
+    weightKg,
+    activityLevel,
+    mode,
+    dietaryRegime,
+    allergies,
+    preferences,
+  } = validation.data;
 
   const today = new Date().toISOString().slice(0, 10);
   const age = calculateAge(birthDate);
@@ -136,6 +177,9 @@ export async function POST(request: Request) {
         birth_date: birthDate,
         height_cm: heightCm,
         activity_level: activityLevel,
+        dietary_regime: dietaryRegime,
+        allergies,
+        preferences,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "id" }

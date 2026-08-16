@@ -1,12 +1,11 @@
 // ============================================================
 // IterUp — GET /api/logs/summary?date=YYYY-MM-DD
 // ------------------------------------------------------------
-// Riepilogo "macro residui" per il diario: somma i daily_logs del
-// giorno (calcolando i macro al volo via join con `foods`, dato che
-// daily_logs non salva uno snapshot — vedi nota supervisore) e li
-// confronta con il target attivo in `user_targets`
-// (is_active = true, il più recente per created_at in caso di righe
-// multiple).
+// Riepilogo "macro residui" per il diario: somma i macro già salvati
+// come snapshot su daily_logs (kcal/protein_g/carbs_g/fat_g, vedi
+// nota in app/api/logs/route.ts) e li confronta con il target attivo
+// in `user_targets` (is_active = true, il più recente per created_at
+// in caso di righe multiple).
 //
 // NB: la scrittura/gestione di user_targets è di competenza del
 // modulo Obiettivi (A5). Qui lo leggiamo soltanto, in sola lettura,
@@ -30,30 +29,15 @@ export type MacroTotals = {
   fat_g: number;
 };
 
-// Vedi nota in app/api/logs/route.ts: `Relationships` è dichiarato
-// vuoto per ogni tabella, quindi l'embed `foods(...)` va ritipizzato a mano.
-type LogForSummaryRow = {
-  quantity_g: number;
-  foods: {
-    kcal_100g: number;
-    protein_100g: number;
-    carbs_100g: number;
-    fat_100g: number;
-  } | null;
-};
-
 export async function GET(request: NextRequest) {
   const date = request.nextUrl.searchParams.get("date") ?? todayIso();
 
   const [logsResult, targetResult] = await Promise.all([
     supabaseServer
       .from("daily_logs")
-      .select(
-        `quantity_g, foods ( kcal_100g, protein_100g, carbs_100g, fat_100g )`
-      )
+      .select("kcal, protein_g, carbs_g, fat_g")
       .eq("user_id", CURRENT_USER_ID)
-      .eq("logged_at", date)
-      .returns<LogForSummaryRow[]>(),
+      .eq("logged_at", date),
     supabaseServer
       .from("user_targets")
       .select("id, mode, daily_kcal, protein_g, carbs_g, fat_g, created_at")
@@ -72,16 +56,12 @@ export async function GET(request: NextRequest) {
   }
 
   const consumed: MacroTotals = (logsResult.data ?? []).reduce(
-    (acc, row) => {
-      const food = Array.isArray(row.foods) ? row.foods[0] : row.foods;
-      const factor = row.quantity_g / 100;
-      return {
-        kcal: acc.kcal + (food?.kcal_100g ?? 0) * factor,
-        protein_g: acc.protein_g + (food?.protein_100g ?? 0) * factor,
-        carbs_g: acc.carbs_g + (food?.carbs_100g ?? 0) * factor,
-        fat_g: acc.fat_g + (food?.fat_100g ?? 0) * factor,
-      };
-    },
+    (acc, row) => ({
+      kcal: acc.kcal + row.kcal,
+      protein_g: acc.protein_g + row.protein_g,
+      carbs_g: acc.carbs_g + row.carbs_g,
+      fat_g: acc.fat_g + row.fat_g,
+    }),
     { kcal: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
   );
 

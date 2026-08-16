@@ -3,8 +3,17 @@
 // ------------------------------------------------------------
 // Funzioni pure, nessun side-effect / accesso DB. Formula di
 // Mifflin-St Jeor per il BMR, moltiplicatori di attività per il
-// TDEE, poi split macro in base all'obiettivo (mode).
+// TDEE, poi split macro in base al tipo di dieta scelto dall'utente
+// (vedi lib/nutrition-options.ts — lista aperta, non derivata dal
+// delta peso attuale/obiettivo, per decisione esplicita del
+// supervisore che sovrascrive PRD-addendum-onboarding-form.md 2.1).
+//
+// In futuro è previsto affiancare a Mifflin-St Jeor altre formule di
+// calcolo del dispendio calorico (es. Harris-Benedict) selezionabili
+// dall'utente — non ancora implementato, fuori scope di questa fase.
 // ============================================================
+
+import type { DietMode } from "./nutrition-options";
 
 export type Sex = "m" | "f";
 
@@ -15,7 +24,7 @@ export type ActivityLevel =
   | "attivo"
   | "molto_attivo";
 
-export type GoalMode = "loss" | "maintain" | "gain";
+export type GoalMode = DietMode;
 
 export interface TDEEInput {
   sex: Sex;
@@ -47,22 +56,26 @@ export const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
   molto_attivo: 1.9, // esercizio molto intenso + lavoro fisico
 };
 
-// Aggiustamento percentuale sul TDEE in base all'obiettivo.
-// loss: deficit -20% (ragionevole, sostenibile)
-// maintain: nessun aggiustamento
-// gain: surplus +12.5% (nel range consigliato 10-15%)
+// Aggiustamento percentuale sul TDEE in base al tipo di dieta.
+// dimagrimento: deficit -20% (ragionevole, sostenibile)
+// mantenimento: nessun aggiustamento
+// costruzione_muscolare: surplus +12.5% (nel range consigliato 10-15%)
+// recupero: leggero surplus +5%, per favorire il recupero senza
+//   accumulo di grasso eccessivo (es. dopo un periodo di deficit/infortunio)
 export const MODE_KCAL_ADJUSTMENT: Record<GoalMode, number> = {
-  loss: -0.2,
-  maintain: 0,
-  gain: 0.125,
+  dimagrimento: -0.2,
+  mantenimento: 0,
+  costruzione_muscolare: 0.125,
+  recupero: 0.05,
 };
 
 // Proteine g/kg di peso corporeo. Più alte in deficit per
 // preservare la massa magra, leggermente più basse in surplus.
 export const PROTEIN_G_PER_KG: Record<GoalMode, number> = {
-  loss: 2.2,
-  maintain: 2.0,
-  gain: 1.8,
+  dimagrimento: 2.2,
+  mantenimento: 2.0,
+  costruzione_muscolare: 1.8,
+  recupero: 2.0,
 };
 
 // Quota di kcal giornaliere da grassi (25-30% consigliato, usiamo 28%).
@@ -128,8 +141,5 @@ export const ACTIVITY_LEVEL_OPTIONS: { value: ActivityLevel; label: string }[] =
   { value: "molto_attivo", label: "Molto attivo (esercizio intenso + lavoro fisico)" },
 ];
 
-export const GOAL_MODE_OPTIONS: { value: GoalMode; label: string }[] = [
-  { value: "loss", label: "Dimagrire" },
-  { value: "maintain", label: "Mantenere" },
-  { value: "gain", label: "Aumentare massa" },
-];
+// Le opzioni del tipo di dieta vivono in un unico posto:
+// vedi DIET_MODES in lib/nutrition-options.ts.

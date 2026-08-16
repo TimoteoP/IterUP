@@ -19,6 +19,7 @@ export const NAV_LINKS: NavLink[] = [
   { href: "/obiettivi", label: "Obiettivi", icon: "🎯" },
   { href: "/attivita", label: "Attività", icon: "🏃" },
   { href: "/statistiche", label: "Statistiche", icon: "📊" },
+  { href: "/impostazioni", label: "Impostazioni", icon: "⚙️" },
 ];
 
 /**

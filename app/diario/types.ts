@@ -3,16 +3,24 @@
 // ------------------------------------------------------------
 // Non tocca i contratti congelati (/lib/types.ts): sono solo forme
 // di risposta usate tra le API route di questo modulo e la UI.
+// MEAL_TYPES/DIET_MODES vivono in /lib/nutrition-options.ts (unica
+// fonte, vedi PRD-addendum-onboarding-form.md sezione 6).
 // ============================================================
 
-export const MEAL_TYPES = ["colazione", "pranzo", "cena", "spuntino"] as const;
-export type MealType = (typeof MEAL_TYPES)[number];
+import { MEAL_TYPES as ALL_MEAL_TYPES } from "@/lib/nutrition-options";
+import type { MealType, DietMode } from "@/lib/nutrition-options";
+
+export type { MealType };
+export { isMealType } from "@/lib/nutrition-options";
+export const MEAL_TYPES: readonly MealType[] = ALL_MEAL_TYPES.map((m) => m.value);
 
 export const MEAL_LABELS: Record<MealType, string> = {
   colazione: "Colazione",
   pranzo: "Pranzo",
   cena: "Cena",
   spuntino: "Spuntino",
+  digiuno: "Digiuno",
+  integrazione: "Integrazione",
 };
 
 export type FoodResult = {
@@ -28,9 +36,9 @@ export type FoodResult = {
 
 export type LogWithMacros = {
   id: string;
-  food_id: string;
-  food_name: string;
-  quantity_g: number;
+  food_id: string | null;
+  food_name: string | null;
+  quantity_g: number | null;
   meal_type: MealType;
   logged_at: string;
   created_at: string | null;
@@ -38,6 +46,7 @@ export type LogWithMacros = {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
+  fiber_g: number | null;
 };
 
 export type MacroTotals = {
@@ -52,7 +61,7 @@ export type ActiveTarget = {
   protein_g: number;
   carbs_g: number;
   fat_g: number;
-  mode: "loss" | "maintain" | "gain";
+  mode: DietMode;
 };
 
 export type LogsSummary = {

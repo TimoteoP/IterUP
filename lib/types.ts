@@ -38,6 +38,9 @@ export interface Database {
             | "attivo"
             | "molto_attivo"
             | null;
+          dietary_regime: "mediterraneo" | "keto" | "paleo" | "high_carb" | null;
+          allergies: string[];
+          preferences: string[];
           created_at: string | null;
           updated_at: string | null;
         };
@@ -54,6 +57,9 @@ export interface Database {
             | "attivo"
             | "molto_attivo"
             | null;
+          dietary_regime?: "mediterraneo" | "keto" | "paleo" | "high_carb" | null;
+          allergies?: string[];
+          preferences?: string[];
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -70,6 +76,9 @@ export interface Database {
             | "attivo"
             | "molto_attivo"
             | null;
+          dietary_regime?: "mediterraneo" | "keto" | "paleo" | "high_carb" | null;
+          allergies?: string[];
+          preferences?: string[];
           created_at?: string | null;
           updated_at?: string | null;
         };
@@ -79,7 +88,7 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          mode: "loss" | "maintain" | "gain";
+          mode: "dimagrimento" | "mantenimento" | "costruzione_muscolare" | "recupero";
           daily_kcal: number;
           protein_g: number;
           carbs_g: number;
@@ -90,7 +99,7 @@ export interface Database {
         Insert: {
           id?: string;
           user_id: string;
-          mode: "loss" | "maintain" | "gain";
+          mode: "dimagrimento" | "mantenimento" | "costruzione_muscolare" | "recupero";
           daily_kcal: number;
           protein_g: number;
           carbs_g: number;
@@ -101,7 +110,7 @@ export interface Database {
         Update: {
           id?: string;
           user_id?: string;
-          mode?: "loss" | "maintain" | "gain";
+          mode?: "dimagrimento" | "mantenimento" | "costruzione_muscolare" | "recupero";
           daily_kcal?: number;
           protein_g?: number;
           carbs_g?: number;
@@ -157,27 +166,60 @@ export interface Database {
         Row: {
           id: string;
           user_id: string;
-          food_id: string;
-          quantity_g: number;
-          meal_type: "colazione" | "pranzo" | "cena" | "spuntino";
+          food_id: string | null;
+          quantity_g: number | null;
+          meal_type:
+            | "colazione"
+            | "pranzo"
+            | "cena"
+            | "spuntino"
+            | "digiuno"
+            | "integrazione";
+          kcal: number;
+          protein_g: number;
+          carbs_g: number;
+          fat_g: number;
+          fiber_g: number | null;
           logged_at: string;
           created_at: string | null;
         };
         Insert: {
           id?: string;
           user_id: string;
-          food_id: string;
-          quantity_g: number;
-          meal_type: "colazione" | "pranzo" | "cena" | "spuntino";
+          food_id?: string | null;
+          quantity_g?: number | null;
+          meal_type:
+            | "colazione"
+            | "pranzo"
+            | "cena"
+            | "spuntino"
+            | "digiuno"
+            | "integrazione";
+          kcal?: number;
+          protein_g?: number;
+          carbs_g?: number;
+          fat_g?: number;
+          fiber_g?: number | null;
           logged_at?: string;
           created_at?: string | null;
         };
         Update: {
           id?: string;
           user_id?: string;
-          food_id?: string;
-          quantity_g?: number;
-          meal_type?: "colazione" | "pranzo" | "cena" | "spuntino";
+          food_id?: string | null;
+          quantity_g?: number | null;
+          meal_type?:
+            | "colazione"
+            | "pranzo"
+            | "cena"
+            | "spuntino"
+            | "digiuno"
+            | "integrazione";
+          kcal?: number;
+          protein_g?: number;
+          carbs_g?: number;
+          fat_g?: number;
+          fiber_g?: number | null;
           logged_at?: string;
           created_at?: string | null;
         };
@@ -351,6 +393,36 @@ export interface Database {
           status?: "in_corso" | "raggiunto" | "abbandonato" | null;
           created_at?: string | null;
           completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      supplements: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          dosage: string | null;
+          unit: string | null;
+          note: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          dosage?: string | null;
+          unit?: string | null;
+          note?: string | null;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          name?: string;
+          dosage?: string | null;
+          unit?: string | null;
+          note?: string | null;
+          created_at?: string | null;
         };
         Relationships: [];
       };

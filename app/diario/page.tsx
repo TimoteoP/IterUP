@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import MacroProgressBar from "./MacroProgressBar";
+import { MEAL_TYPES_WITHOUT_FOOD } from "@/lib/nutrition-options";
 import {
   MEAL_TYPES,
   MEAL_LABELS,
@@ -11,6 +12,8 @@ import {
   type LogWithMacros,
   type LogsSummary,
 } from "./types";
+
+const FOOD_MEAL_TYPES = MEAL_TYPES.filter((mt) => !MEAL_TYPES_WITHOUT_FOOD.includes(mt));
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -183,12 +186,35 @@ export default function DiarioPage() {
       pranzo: [],
       cena: [],
       spuntino: [],
+      digiuno: [],
+      integrazione: [],
     };
     for (const log of logs) {
       grouped[log.meal_type].push(log);
     }
     return grouped;
   }, [logs]);
+
+  const [loggingFast, setLoggingFast] = useState(false);
+
+  async function handleLogFast(type: Extract<MealType, "digiuno">) {
+    setLoggingFast(true);
+    setAddError(null);
+    try {
+      const res = await fetch("/api/logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meal_type: type, logged_at: date }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Errore nel salvataggio");
+      await refresh();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Errore sconosciuto");
+    } finally {
+      setLoggingFast(false);
+    }
+  }
 
   const previewMacros = useMemo(() => {
     if (!selectedFood) return null;
@@ -313,15 +339,28 @@ export default function DiarioPage() {
 
         {/* Ricerca e aggiunta alimento */}
         <section style={cardStyle} className="flex flex-col" >
-          <h2
-            style={{
-              fontSize: font.size.md,
-              fontWeight: font.weight.semibold,
-              marginBottom: spacing.md,
-            }}
+          <div
+            className="flex items-center justify-between"
+            style={{ marginBottom: spacing.md }}
           >
-            Aggiungi alimento
-          </h2>
+            <h2 style={{ fontSize: font.size.md, fontWeight: font.weight.semibold }}>
+              Aggiungi alimento
+            </h2>
+            <button
+              onClick={() => handleLogFast("digiuno")}
+              disabled={loggingFast}
+              style={{
+                fontSize: font.size.xs,
+                color: colors.textSecondary,
+                border: `1px solid ${colors.border}`,
+                borderRadius: radius.full,
+                padding: `2px ${spacing.sm}`,
+                opacity: loggingFast ? 0.6 : 1,
+              }}
+            >
+              Registra digiuno
+            </button>
+          </div>
 
           <div className="relative flex flex-col" style={{ gap: spacing.sm }}>
             <input
@@ -458,7 +497,7 @@ export default function DiarioPage() {
                       fontSize: font.size.md,
                     }}
                   >
-                    {MEAL_TYPES.map((mt) => (
+                    {FOOD_MEAL_TYPES.map((mt) => (
                       <option key={mt} value={mt}>
                         {MEAL_LABELS[mt]}
                       </option>
@@ -530,14 +569,18 @@ export default function DiarioPage() {
                       }}
                     >
                       <div className="flex flex-col">
-                        <span style={{ fontSize: font.size.sm }}>{log.food_name}</span>
+                        <span style={{ fontSize: font.size.sm }}>
+                          {log.food_name ?? MEAL_LABELS[log.meal_type]}
+                        </span>
                         <span style={{ fontSize: font.size.xs, color: colors.textMuted }}>
-                          {log.quantity_g}g · {Math.round(log.kcal)} kcal
+                          {log.quantity_g !== null
+                            ? `${log.quantity_g}g · ${Math.round(log.kcal)} kcal`
+                            : "Registrato"}
                         </span>
                       </div>
                       <button
                         onClick={() => handleDelete(log.id)}
-                        aria-label={`Rimuovi ${log.food_name}`}
+                        aria-label={`Rimuovi ${log.food_name ?? MEAL_LABELS[log.meal_type]}`}
                         style={{ color: colors.textMuted, fontSize: font.size.lg }}
                       >
                         ×

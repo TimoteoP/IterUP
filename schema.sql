@@ -1,15 +1,21 @@
 -- ============================================================
--- IterUp - Schema database (CANONICO — già applicato su Supabase)
+-- IterUp - Schema database (CANONICO — riflette lo stato target)
 -- ------------------------------------------------------------
 -- Questo è l'UNICO schema.sql valido per il progetto. Non va
 -- rigenerato da nessun agente: le tabelle esistono già nel
 -- progetto Supabase collegato, con la tabella foods già popolata
--- (179 alimenti). Questo file serve solo come riferimento/backup
--- e per eventuali nuovi ambienti (staging, ecc.).
+-- (179 alimenti). Questo file serve come riferimento/backup e per
+-- eventuali nuovi ambienti (staging, ecc.) creati da zero.
+--
+-- ATTENZIONE: per il DB già esistente, applicare le modifiche
+-- rispetto alla versione precedente tramite
+-- schema-migration-002-addendum.sql (non rieseguire questo file
+-- per intero su un DB già popolato: i `create table if not exists`
+-- non alterano le tabelle esistenti).
 -- ============================================================
 
 -- ------------------------------------------------------------
--- 1. PROFILO UTENTE (dati fisici base per calcolo TDEE)
+-- 1. PROFILO UTENTE (dati fisici base per calcolo TDEE + preferenze)
 -- ------------------------------------------------------------
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -18,6 +24,14 @@ create table if not exists public.profiles (
   birth_date date,
   height_cm numeric,
   activity_level text check (activity_level in ('sedentario', 'leggero', 'moderato', 'attivo', 'molto_attivo')),
+  -- Regime alimentare: lista aperta, tenuta in un unico posto anche
+  -- lato codice (vedi /lib/nutrition-options.ts) invece che sparsa nel
+  -- codice — vedi PRD-addendum-onboarding-form.md sezione 2.2.
+  dietary_regime text check (dietary_regime in ('mediterraneo', 'keto', 'paleo', 'high_carb')) default 'mediterraneo',
+  -- Vincolo HARD per il generatore AI: mai proporre pasti con questi ingredienti.
+  allergies text[] not null default '{}',
+  -- Vincolo SOFT: preferenze di gusto, orientano ma non bloccano.
+  preferences text[] not null default '{}',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -28,7 +42,12 @@ create table if not exists public.profiles (
 create table if not exists public.user_targets (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null,
-  mode text check (mode in ('loss', 'maintain', 'gain')) not null,
+  -- Tipo di dieta scelto direttamente dall'utente (non derivato dal
+  -- delta peso attuale/obiettivo — vedi decisione supervisore che
+  -- sovrascrive PRD-addendum-onboarding-form.md sezione 2.1). Lista
+  -- aperta, tenuta in sync con /lib/nutrition-options.ts: aggiungere
+  -- qui nuovi valori non richiede altre modifiche allo schema.
+  mode text check (mode in ('dimagrimento', 'mantenimento', 'costruzione_muscolare', 'recupero')) not null,
   daily_kcal numeric not null,
   protein_g numeric not null,
   carbs_g numeric not null,
@@ -60,16 +79,23 @@ create index if not exists idx_foods_name on public.foods using gin (to_tsvector
 -- ------------------------------------------------------------
 -- 4. DIARIO ALIMENTARE
 -- ------------------------------------------------------------
+-- food_id è nullable perché le voci 'digiuno' e 'integrazione' non
+-- referenziano un alimento della tabella foods (vedi addendum sezione 3).
+-- kcal/protein_g/carbs_g/fat_g/fiber_g sono uno snapshot calcolato una
+-- volta sola al momento del log (food.<campo>_100g * quantity_g / 100),
+-- non un valore vivo: così lo storico resta corretto anche se in futuro
+-- i valori nutrizionali di un alimento in `foods` cambiassero.
 create table if not exists public.daily_logs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete cascade not null,
-  food_id uuid references public.foods(id) not null,
-  quantity_g numeric not null,
-  meal_type text check (meal_type in ('colazione', 'pranzo', 'cena', 'spuntino')) not null,
-  kcal numeric not null,
-  protein_g numeric not null,
-  carbs_g numeric not null,
-  fat_g numeric not null,
+  food_id uuid references public.foods(id),
+  quantity_g numeric,
+  meal_type text check (meal_type in ('colazione', 'pranzo', 'cena', 'spuntino', 'digiuno', 'integrazione')) not null,
+  kcal numeric not null default 0,
+  protein_g numeric not null default 0,
+  carbs_g numeric not null default 0,
+  fat_g numeric not null default 0,
+  fiber_g numeric,
   logged_at date not null default current_date,
   created_at timestamptz default now()
 );
@@ -159,6 +185,25 @@ create table if not exists public.goals (
 
 create index if not exists idx_goals_user on public.goals(user_id, status);
 
+-- ------------------------------------------------------------
+-- 10. INTEGRATORI POSSEDUTI (fonte per generatore AI e chat Q&A)
+-- ------------------------------------------------------------
+-- Vedi PRD-addendum-onboarding-form.md sezione 5.1. dosage è un campo
+-- libero ma strutturato (sostanza + quantità per unità, es. "Berberina
+-- HCL 500mg"), non normalizzato in colonne separate: per l'MVP a un
+-- solo utente non serve altro.
+create table if not exists public.supplements (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  name text not null,
+  dosage text,
+  unit text,
+  note text,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_supplements_user on public.supplements(user_id);
+
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- ------------------------------------------------------------
@@ -175,6 +220,7 @@ alter table public.habits enable row level security;
 alter table public.habit_logs enable row level security;
 alter table public.goals enable row level security;
 alter table public.foods enable row level security;
+alter table public.supplements enable row level security;
 
 create policy "foods_read_all" on public.foods for select using (true);
 create policy "profiles_own" on public.profiles for all using (auth.uid() = id);
@@ -185,6 +231,7 @@ create policy "activity_logs_own" on public.activity_logs for all using (auth.ui
 create policy "habits_own" on public.habits for all using (auth.uid() = user_id);
 create policy "habit_logs_own" on public.habit_logs for all using (auth.uid() = user_id);
 create policy "goals_own" on public.goals for all using (auth.uid() = user_id);
+create policy "supplements_own" on public.supplements for all using (auth.uid() = user_id);
 
 -- ------------------------------------------------------------
 -- Setup una tantum: crea l'unico utente fisso dell'app

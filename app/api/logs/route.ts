@@ -1,12 +1,15 @@
 // ============================================================
 // IterUp — /api/logs
 // ------------------------------------------------------------
-// GET  ?date=YYYY-MM-DD   -> log del giorno (default: oggi), con
-//                            macro calcolati al volo via join con
-//                            `foods` (daily_logs NON salva snapshot
-//                            di kcal/protein/carbs/fat, vedi nota
-//                            del supervisore — solo food_id + quantity_g).
-// POST { food_id, quantity_g, meal_type, logged_at? } -> crea un log.
+// GET  ?date=YYYY-MM-DD   -> log del giorno (default: oggi). I macro
+//                            sono uno snapshot salvato su daily_logs
+//                            al momento del log (calcolato una sola
+//                            volta da food.<campo>_100g * quantity_g
+//                            / 100), non ricalcolati a ogni lettura.
+// POST { meal_type, food_id?, quantity_g?, logged_at? } -> crea un log.
+//        food_id/quantity_g sono richiesti solo per i pasti "con
+//        alimento" (colazione/pranzo/cena/spuntino); 'digiuno' e
+//        'integrazione' sono log diretti senza food_id, macro a 0.
 //
 // Tutte le query filtrano esplicitamente su CURRENT_USER_ID (niente
 // auth.uid(), niente sessione — vedi CLAUDE.md regola 1).
@@ -15,53 +18,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
-import type { TablesInsert } from "@/lib/types";
+import type { TablesInsert, Tables } from "@/lib/types";
+import { isMealType, MEAL_TYPES_WITHOUT_FOOD, type MealType } from "@/lib/nutrition-options";
 
 export const dynamic = "force-dynamic";
-
-const MEAL_TYPES = ["colazione", "pranzo", "cena", "spuntino"] as const;
-type MealType = (typeof MEAL_TYPES)[number];
-
-function isMealType(value: unknown): value is MealType {
-  return typeof value === "string" && (MEAL_TYPES as readonly string[]).includes(value);
-}
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export type LogWithMacros = {
-  id: string;
-  food_id: string;
-  food_name: string;
-  quantity_g: number;
-  meal_type: MealType;
-  logged_at: string;
-  created_at: string | null;
-  kcal: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-};
+export type LogWithMacros = Tables<"daily_logs"> & { food_name: string | null };
 
 // `lib/types.ts` dichiara `Relationships: []` per ogni tabella (nessuna
 // FK descritta), quindi il client non può inferire da solo la forma
-// dell'embed `foods(...)`. Dichiariamo qui la forma reale della riga
-// restituita da Postgres e la applichiamo con `.returns<...>()`.
-type DailyLogRow = {
-  id: string;
-  food_id: string;
-  quantity_g: number;
-  meal_type: MealType;
-  logged_at: string;
-  created_at: string | null;
-  foods: {
-    name: string;
-    kcal_100g: number;
-    protein_100g: number;
-    carbs_100g: number;
-    fat_100g: number;
-  } | null;
+// dell'embed `foods(...)`. Qui serve solo il nome per la UI: i macro
+// arrivano già calcolati dalle colonne dirette di daily_logs.
+type DailyLogRow = Tables<"daily_logs"> & {
+  foods: { name: string } | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -70,8 +43,8 @@ export async function GET(request: NextRequest) {
   const { data, error } = await supabaseServer
     .from("daily_logs")
     .select(
-      `id, food_id, quantity_g, meal_type, logged_at, created_at,
-       foods ( name, kcal_100g, protein_100g, carbs_100g, fat_100g )`
+      `id, user_id, food_id, quantity_g, meal_type, kcal, protein_g, carbs_g, fat_g,
+       fiber_g, logged_at, created_at, foods ( name )`
     )
     .eq("user_id", CURRENT_USER_ID)
     .eq("logged_at", date)
@@ -83,24 +56,8 @@ export async function GET(request: NextRequest) {
   }
 
   const logs: LogWithMacros[] = (data ?? []).map((row) => {
-    // La relazione foods può arrivare come oggetto o come array a
-    // seconda della versione del client: normalizziamo entrambi i casi.
-    const food = Array.isArray(row.foods) ? row.foods[0] : row.foods;
-    const factor = row.quantity_g / 100;
-
-    return {
-      id: row.id,
-      food_id: row.food_id,
-      food_name: food?.name ?? "Alimento sconosciuto",
-      quantity_g: row.quantity_g,
-      meal_type: row.meal_type as MealType,
-      logged_at: row.logged_at,
-      created_at: row.created_at,
-      kcal: (food?.kcal_100g ?? 0) * factor,
-      protein_g: (food?.protein_100g ?? 0) * factor,
-      carbs_g: (food?.carbs_100g ?? 0) * factor,
-      fat_g: (food?.fat_100g ?? 0) * factor,
-    };
+    const { foods, ...rest } = row;
+    return { ...rest, food_name: foods?.name ?? null };
   });
 
   return NextResponse.json({ date, logs });
@@ -119,37 +76,75 @@ export async function POST(request: NextRequest) {
     unknown
   >;
 
-  if (typeof food_id !== "string" || food_id.length === 0) {
-    return NextResponse.json({ error: "food_id mancante o non valido" }, { status: 400 });
-  }
-  if (typeof quantity_g !== "number" || !Number.isFinite(quantity_g) || quantity_g <= 0) {
-    return NextResponse.json(
-      { error: "quantity_g deve essere un numero maggiore di 0" },
-      { status: 400 }
-    );
-  }
   if (!isMealType(meal_type)) {
-    return NextResponse.json(
-      { error: `meal_type deve essere uno tra: ${MEAL_TYPES.join(", ")}` },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "meal_type non valido" }, { status: 400 });
   }
   if (logged_at !== undefined && typeof logged_at !== "string") {
     return NextResponse.json({ error: "logged_at non valido" }, { status: 400 });
   }
 
-  const insertPayload: TablesInsert<"daily_logs"> = {
-    user_id: CURRENT_USER_ID,
-    food_id,
-    quantity_g,
-    meal_type,
-    ...(logged_at ? { logged_at } : {}),
-  };
+  const needsFood = !MEAL_TYPES_WITHOUT_FOOD.includes(meal_type as MealType);
+
+  let insertPayload: TablesInsert<"daily_logs">;
+
+  if (needsFood) {
+    if (typeof food_id !== "string" || food_id.length === 0) {
+      return NextResponse.json({ error: "food_id mancante o non valido" }, { status: 400 });
+    }
+    if (typeof quantity_g !== "number" || !Number.isFinite(quantity_g) || quantity_g <= 0) {
+      return NextResponse.json(
+        { error: "quantity_g deve essere un numero maggiore di 0" },
+        { status: 400 }
+      );
+    }
+
+    const { data: food, error: foodError } = await supabaseServer
+      .from("foods")
+      .select("kcal_100g, protein_100g, carbs_100g, fat_100g, fiber_100g")
+      .eq("id", food_id)
+      .maybeSingle();
+
+    if (foodError) {
+      return NextResponse.json({ error: foodError.message }, { status: 500 });
+    }
+    if (!food) {
+      return NextResponse.json({ error: "Alimento non trovato" }, { status: 404 });
+    }
+
+    const factor = quantity_g / 100;
+    insertPayload = {
+      user_id: CURRENT_USER_ID,
+      food_id,
+      quantity_g,
+      meal_type,
+      kcal: Math.round(food.kcal_100g * factor * 10) / 10,
+      protein_g: Math.round(food.protein_100g * factor * 10) / 10,
+      carbs_g: Math.round(food.carbs_100g * factor * 10) / 10,
+      fat_g: Math.round(food.fat_100g * factor * 10) / 10,
+      fiber_g: food.fiber_100g !== null ? Math.round(food.fiber_100g * factor * 10) / 10 : null,
+      ...(logged_at ? { logged_at } : {}),
+    };
+  } else {
+    // digiuno / integrazione: nessun alimento, nessun macro (vedi
+    // PRD-addendum-onboarding-form.md sezione 3).
+    insertPayload = {
+      user_id: CURRENT_USER_ID,
+      food_id: null,
+      quantity_g: null,
+      meal_type,
+      kcal: 0,
+      protein_g: 0,
+      carbs_g: 0,
+      fat_g: 0,
+      fiber_g: null,
+      ...(logged_at ? { logged_at } : {}),
+    };
+  }
 
   const { data, error } = await supabaseServer
     .from("daily_logs")
     .insert([insertPayload])
-    .select("id, food_id, quantity_g, meal_type, logged_at, created_at")
+    .select()
     .single();
 
   if (error) {
