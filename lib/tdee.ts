@@ -1,12 +1,20 @@
 // ============================================================
 // IterUp — calcolo TDEE e target macro (modulo Onboarding, A1)
 // ------------------------------------------------------------
-// Funzioni pure, nessun side-effect / accesso DB. Formula di
-// Mifflin-St Jeor per il BMR, moltiplicatori di attività per il
-// TDEE, poi split macro in base al tipo di dieta scelto dall'utente
-// (vedi lib/nutrition-options.ts — lista aperta, non derivata dal
-// delta peso attuale/obiettivo, per decisione esplicita del
-// supervisore che sovrascrive PRD-addendum-onboarding-form.md 2.1).
+// Funzioni pure, nessun side-effect / accesso DB.
+//
+// BMR: formula di Mifflin-St Jeor (1990).
+//   Uomini: BMR = 10*peso_kg + 6,25*altezza_cm - 5*età + 5
+//   Donne:  BMR = 10*peso_kg + 6,25*altezza_cm - 5*età - 161
+//
+// TDEE = BMR * moltiplicatore di attività (vedi ACTIVITY_MULTIPLIERS):
+//   sedentario ×1,2 · lievemente attivo ×1,375 · moderatamente
+//   attivo ×1,55 · molto attivo ×1,725 · estremamente attivo ×1,9
+//
+// Poi split macro in base al tipo di dieta scelto dall'utente (vedi
+// lib/nutrition-options.ts — lista aperta, non derivata dal delta
+// peso attuale/obiettivo, per decisione esplicita del supervisore che
+// sovrascrive PRD-addendum-onboarding-form.md 2.1).
 //
 // In futuro è previsto affiancare a Mifflin-St Jeor altre formule di
 // calcolo del dispendio calorico (es. Harris-Benedict) selezionabili
@@ -47,13 +55,13 @@ export interface TDEEResult {
   fatG: number;
 }
 
-// Moltiplicatori di attività (Harris-Benedict / Mifflin standard).
+// Moltiplicatori di attività standard (Mifflin-St Jeor, dal BMR al TDEE).
 export const ACTIVITY_MULTIPLIERS: Record<ActivityLevel, number> = {
-  sedentario: 1.2, // poco o nessun esercizio
-  leggero: 1.375, // esercizio leggero 1-3 giorni/settimana
-  moderato: 1.55, // esercizio moderato 3-5 giorni/settimana
-  attivo: 1.725, // esercizio intenso 6-7 giorni/settimana
-  molto_attivo: 1.9, // esercizio molto intenso + lavoro fisico
+  sedentario: 1.2, // lavoro d'ufficio, nessun allenamento
+  leggero: 1.375, // lievemente attivo: esercizio leggero 1-3 volte/settimana
+  moderato: 1.55, // moderatamente attivo: esercizio moderato 3-5 volte/settimana
+  attivo: 1.725, // molto attivo: allenamento intenso 6-7 volte/settimana
+  molto_attivo: 1.9, // estremamente attivo: lavoro fisico pesante o doppi allenamenti
 };
 
 // Aggiustamento percentuale sul TDEE in base al tipo di dieta.
@@ -134,11 +142,11 @@ export const WEIGHT_KG_RANGE = { min: 30, max: 300 } as const;
 export const AGE_YEARS_RANGE = { min: 10, max: 100 } as const;
 
 export const ACTIVITY_LEVEL_OPTIONS: { value: ActivityLevel; label: string }[] = [
-  { value: "sedentario", label: "Sedentario (poco o nessun esercizio)" },
-  { value: "leggero", label: "Leggero (esercizio 1-3 giorni/settimana)" },
-  { value: "moderato", label: "Moderato (esercizio 3-5 giorni/settimana)" },
-  { value: "attivo", label: "Attivo (esercizio intenso 6-7 giorni/settimana)" },
-  { value: "molto_attivo", label: "Molto attivo (esercizio intenso + lavoro fisico)" },
+  { value: "sedentario", label: "Sedentario (lavoro d'ufficio, nessun allenamento)" },
+  { value: "leggero", label: "Lievemente attivo (esercizio leggero 1-3 volte/settimana)" },
+  { value: "moderato", label: "Moderatamente attivo (esercizio moderato 3-5 volte/settimana)" },
+  { value: "attivo", label: "Molto attivo (allenamento intenso 6-7 volte/settimana)" },
+  { value: "molto_attivo", label: "Estremamente attivo (lavoro fisico pesante o doppi allenamenti)" },
 ];
 
 // Le opzioni del tipo di dieta vivono in un unico posto:
