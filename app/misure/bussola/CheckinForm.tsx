@@ -3,11 +3,14 @@
 // ============================================================
 // IterUp — Bussola: form check-in
 // ------------------------------------------------------------
-// Peso/collo/vita sempre richiesti, fianchi richiesti solo se sesso
-// donna, kcal periodo opzionale, due select qualitativi (collo/
-// polso) — vedi PRD-addendum-bussola-ricomposizione sezione 3 e 6.
-// Validazione bloccante lato client + server (route.ts replica le
-// stesse regole).
+// Peso/collo/vita sempre richiesti; fianchi SOLO se sesso donna (il
+// campo non va mostrato affatto per un utente uomo, non solo
+// disabilitato); petto/coscia/polso opzionali, indicatori di
+// contesto che NON entrano nel calcolo BF%/IR (vedi addendum sezione
+// 8 "Fuori scope"); kcal periodo opzionale; due select qualitativi
+// (collo/polso) — vedi PRD-addendum-bussola-ricomposizione sezione 3
+// e 6. Validazione bloccante lato client + server (route.ts replica
+// le stesse regole).
 // ============================================================
 
 import { useState, type FormEvent } from "react";
@@ -45,6 +48,9 @@ export default function CheckinForm({ sex, onSaved }: CheckinFormProps) {
   const [neckCm, setNeckCm] = useState("");
   const [waistCm, setWaistCm] = useState("");
   const [hipCm, setHipCm] = useState("");
+  const [chestCm, setChestCm] = useState("");
+  const [thighCm, setThighCm] = useState("");
+  const [wristCm, setWristCm] = useState("");
   const [kcalPeriod, setKcalPeriod] = useState("");
   const [neckFeel, setNeckFeel] = useState<string>("0");
   const [wristFeel, setWristFeel] = useState<string>("0");
@@ -67,6 +73,19 @@ export default function CheckinForm({ sex, onSaved }: CheckinFormProps) {
     if (sex === "f") {
       const h = Number(hipCm);
       if (hipCm.trim() === "" || Number.isNaN(h)) return "I fianchi sono obbligatori (calcolo per sesso donna).";
+    }
+
+    for (const [label, raw] of [
+      ["Il petto", chestCm],
+      ["La coscia", thighCm],
+      ["Il polso", wristCm],
+    ] as const) {
+      if (raw.trim() === "") continue;
+      const v = Number(raw);
+      if (Number.isNaN(v)) return `${label} deve essere un numero.`;
+      if (v < CIRCUMFERENCE_RANGE.min || v > CIRCUMFERENCE_RANGE.max) {
+        return `${label} deve essere tra ${CIRCUMFERENCE_RANGE.min} e ${CIRCUMFERENCE_RANGE.max} cm.`;
+      }
     }
     return null;
   }
@@ -91,6 +110,9 @@ export default function CheckinForm({ sex, onSaved }: CheckinFormProps) {
           neck_cm: neckCm,
           waist_cm: waistCm,
           hip_cm: sex === "f" ? hipCm : null,
+          chest_cm: chestCm || null,
+          thigh_cm: thighCm || null,
+          wrist_cm: wristCm || null,
           kcal_period: kcalPeriod || null,
           neck_feel: Number(neckFeel),
           wrist_feel: Number(wristFeel),
@@ -103,6 +125,9 @@ export default function CheckinForm({ sex, onSaved }: CheckinFormProps) {
       setNeckCm("");
       setWaistCm("");
       setHipCm("");
+      setChestCm("");
+      setThighCm("");
+      setWristCm("");
       setKcalPeriod("");
       setNeckFeel("0");
       setWristFeel("0");
@@ -132,7 +157,7 @@ export default function CheckinForm({ sex, onSaved }: CheckinFormProps) {
         <input type="date" style={inputStyle} value={recordedAt} max={todayISODate()} onChange={(e) => setRecordedAt(e.target.value)} required />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4" style={{ gap: spacing.sm }}>
+      <div className={`grid grid-cols-2 ${sex === "f" ? "sm:grid-cols-4" : "sm:grid-cols-3"}`} style={{ gap: spacing.sm }}>
         <div>
           <label style={labelStyle}>Peso (kg) *</label>
           <input type="number" inputMode="decimal" step="0.1" style={inputStyle} value={weightKg} onChange={(e) => setWeightKg(e.target.value)} required />
@@ -145,19 +170,39 @@ export default function CheckinForm({ sex, onSaved }: CheckinFormProps) {
           <label style={labelStyle}>Vita (cm) *</label>
           <input type="number" inputMode="decimal" step="0.1" style={inputStyle} value={waistCm} onChange={(e) => setWaistCm(e.target.value)} required />
         </div>
-        <div>
-          <label style={labelStyle}>Fianchi (cm){sex === "f" ? " *" : ""}</label>
-          <input
-            type="number"
-            inputMode="decimal"
-            step="0.1"
-            style={{ ...inputStyle, opacity: sex === "f" ? 1 : 0.5 }}
-            value={hipCm}
-            onChange={(e) => setHipCm(e.target.value)}
-            disabled={sex !== "f"}
-            placeholder={sex !== "f" ? "non richiesto" : undefined}
-            required={sex === "f"}
-          />
+        {sex === "f" && (
+          <div>
+            <label style={labelStyle}>Fianchi (cm) *</label>
+            <input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              style={inputStyle}
+              value={hipCm}
+              onChange={(e) => setHipCm(e.target.value)}
+              required
+            />
+          </div>
+        )}
+      </div>
+
+      <div>
+        <p style={{ ...labelStyle, marginBottom: spacing.xs }}>
+          Altre misure (opzionali, indicatori di contesto — non entrano nel calcolo)
+        </p>
+        <div className="grid grid-cols-3" style={{ gap: spacing.sm }}>
+          <div>
+            <label style={labelStyle}>Petto (cm)</label>
+            <input type="number" inputMode="decimal" step="0.1" style={inputStyle} value={chestCm} onChange={(e) => setChestCm(e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>Coscia (cm)</label>
+            <input type="number" inputMode="decimal" step="0.1" style={inputStyle} value={thighCm} onChange={(e) => setThighCm(e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>Polso (cm)</label>
+            <input type="number" inputMode="decimal" step="0.1" style={inputStyle} value={wristCm} onChange={(e) => setWristCm(e.target.value)} />
+          </div>
         </div>
       </div>
 

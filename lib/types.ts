@@ -236,6 +236,7 @@ export interface Database {
           waist_cm: number | null;
           thigh_cm: number | null;
           hip_cm: number | null;
+          wrist_cm: number | null;
           kcal_period: number | null;
           neck_feel: -1 | 0 | 1 | null;
           wrist_feel: -1 | 0 | 1 | null;
@@ -252,6 +253,7 @@ export interface Database {
           waist_cm?: number | null;
           thigh_cm?: number | null;
           hip_cm?: number | null;
+          wrist_cm?: number | null;
           kcal_period?: number | null;
           neck_feel?: -1 | 0 | 1 | null;
           wrist_feel?: -1 | 0 | 1 | null;
@@ -268,6 +270,7 @@ export interface Database {
           waist_cm?: number | null;
           thigh_cm?: number | null;
           hip_cm?: number | null;
+          wrist_cm?: number | null;
           kcal_period?: number | null;
           neck_feel?: -1 | 0 | 1 | null;
           wrist_feel?: -1 | 0 | 1 | null;

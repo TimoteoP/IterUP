@@ -124,6 +124,7 @@ create table if not exists public.body_metrics (
   -- Campi Bussola di Ricomposizione (nullable: non ogni misurazione è
   -- un check-in bussola completo).
   hip_cm numeric, -- richiesto lato form solo se profilo.sex = 'f'
+  wrist_cm numeric, -- indicatore di contesto, non entra nel calcolo BF%/IR
   kcal_period numeric, -- kcal totali dal check-in precedente a questo
   neck_feel smallint check (neck_feel in (-1, 0, 1)), -- -1 più pieno, 0 uguale, 1 più sottile
   wrist_feel smallint check (wrist_feel in (-1, 0, 1)), -- -1 più stretto, 0 uguale, 1 più largo

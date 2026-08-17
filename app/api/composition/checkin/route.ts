@@ -86,6 +86,21 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Indicatori di contesto opzionali: non entrano nel calcolo BF%/IR
+  // (vedi addendum sezione 8 "Fuori scope"), ma vengono registrati.
+  const chest_cm = parseNumber(b.chest_cm);
+  if (chest_cm !== null && (chest_cm < CIRCUMFERENCE_RANGE.min || chest_cm > CIRCUMFERENCE_RANGE.max)) {
+    errors.push(`Il petto deve essere tra ${CIRCUMFERENCE_RANGE.min} e ${CIRCUMFERENCE_RANGE.max} cm.`);
+  }
+  const thigh_cm = parseNumber(b.thigh_cm);
+  if (thigh_cm !== null && (thigh_cm < CIRCUMFERENCE_RANGE.min || thigh_cm > CIRCUMFERENCE_RANGE.max)) {
+    errors.push(`La coscia deve essere tra ${CIRCUMFERENCE_RANGE.min} e ${CIRCUMFERENCE_RANGE.max} cm.`);
+  }
+  const wrist_cm = parseNumber(b.wrist_cm);
+  if (wrist_cm !== null && (wrist_cm < CIRCUMFERENCE_RANGE.min || wrist_cm > CIRCUMFERENCE_RANGE.max)) {
+    errors.push(`Il polso deve essere tra ${CIRCUMFERENCE_RANGE.min} e ${CIRCUMFERENCE_RANGE.max} cm.`);
+  }
+
   const kcal_period = parseNumber(b.kcal_period);
   if (kcal_period !== null && (kcal_period < KCAL_PERIOD_RANGE.min || kcal_period > KCAL_PERIOD_RANGE.max)) {
     errors.push(`Le kcal del periodo devono essere tra ${KCAL_PERIOD_RANGE.min} e ${KCAL_PERIOD_RANGE.max}.`);
@@ -104,11 +119,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: errors.join(" ") }, { status: 400 });
   }
 
+  // Petto/coscia/polso: se il campo è vuoto in questo check-in, non lo
+  // includiamo nel patch (invece di forzarlo a null), così un valore
+  // già scritto dal form Misure per lo stesso giorno non viene perso
+  // — vedi lib/body-metrics-store.ts.
+  const optionalContextFields: Partial<{ chest_cm: number; thigh_cm: number; wrist_cm: number }> = {};
+  if (chest_cm !== null) optionalContextFields.chest_cm = chest_cm;
+  if (thigh_cm !== null) optionalContextFields.thigh_cm = thigh_cm;
+  if (wrist_cm !== null) optionalContextFields.wrist_cm = wrist_cm;
+
   const { data, error } = await upsertBodyMetricsForDate(CURRENT_USER_ID, recorded_at, {
     weight_kg,
     neck_cm,
     waist_cm,
     hip_cm: profile.sex === "f" ? hip_cm : null,
+    ...optionalContextFields,
     kcal_period,
     neck_feel: neck_feel as -1 | 0 | 1 | null,
     wrist_feel: wrist_feel as -1 | 0 | 1 | null,
