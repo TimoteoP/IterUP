@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
-import type { TablesInsert } from "@/lib/types";
+import { upsertBodyMetricsForDate } from "@/lib/body-metrics-store";
 import { validateBodyMetricsPayload, type BodyMetricsPayload } from "./validation";
 
 // Evita che Next metta in cache le risposte fetch di supabase-js: lo
@@ -50,23 +50,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: errors.join(" ") }, { status: 400 });
   }
 
-  const payload: TablesInsert<"body_metrics"> = {
-    user_id: CURRENT_USER_ID,
-    recorded_at,
+  // Merge-aware: non tocca hip_cm/kcal_period/neck_feel/wrist_feel
+  // eventualmente scritti dal check-in Bussola per lo stesso giorno.
+  const { data, error } = await upsertBodyMetricsForDate(CURRENT_USER_ID, recorded_at, {
     weight_kg,
     neck_cm,
     chest_cm,
     waist_cm,
     thigh_cm,
-  };
-
-  // Upsert: rispetta il vincolo unique(user_id, recorded_at). Se esiste già
-  // una misurazione per questa data la sovrascrive invece di fallire.
-  const { data, error } = await supabaseServer
-    .from("body_metrics")
-    .upsert([payload], { onConflict: "user_id,recorded_at" })
-    .select()
-    .single();
+  });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

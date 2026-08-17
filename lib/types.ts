@@ -235,6 +235,11 @@ export interface Database {
           chest_cm: number | null;
           waist_cm: number | null;
           thigh_cm: number | null;
+          hip_cm: number | null;
+          kcal_period: number | null;
+          neck_feel: -1 | 0 | 1 | null;
+          wrist_feel: -1 | 0 | 1 | null;
+          sex_at_checkin: "m" | "f" | null;
           created_at: string | null;
         };
         Insert: {
@@ -246,6 +251,11 @@ export interface Database {
           chest_cm?: number | null;
           waist_cm?: number | null;
           thigh_cm?: number | null;
+          hip_cm?: number | null;
+          kcal_period?: number | null;
+          neck_feel?: -1 | 0 | 1 | null;
+          wrist_feel?: -1 | 0 | 1 | null;
+          sex_at_checkin?: "m" | "f" | null;
           created_at?: string | null;
         };
         Update: {
@@ -257,6 +267,11 @@ export interface Database {
           chest_cm?: number | null;
           waist_cm?: number | null;
           thigh_cm?: number | null;
+          hip_cm?: number | null;
+          kcal_period?: number | null;
+          neck_feel?: -1 | 0 | 1 | null;
+          wrist_feel?: -1 | 0 | 1 | null;
+          sex_at_checkin?: "m" | "f" | null;
           created_at?: string | null;
         };
         Relationships: [];

@@ -104,7 +104,13 @@ create table if not exists public.daily_logs (
 create index if not exists idx_daily_logs_user_date on public.daily_logs(user_id, logged_at);
 
 -- ------------------------------------------------------------
--- 5. MISURE CORPOREE (peso, collo, petto, vita, coscia)
+-- 5. MISURE CORPOREE (peso, collo, petto, vita, coscia + check-in
+--    Bussola di Ricomposizione: fianchi, kcal periodo, percezione
+--    soggettiva collo/polso — vedi
+--    PRD-addendum-bussola-ricomposizione.md sezione 3. Un'unica
+--    tabella condivisa tra /misure e la Bussola (stesso storico,
+--    stesso vincolo un-record-al-giorno) invece di due tabelle
+--    parallele, per decisione esplicita del supervisore.
 -- ------------------------------------------------------------
 create table if not exists public.body_metrics (
   id uuid primary key default gen_random_uuid(),
@@ -115,6 +121,18 @@ create table if not exists public.body_metrics (
   chest_cm numeric,
   waist_cm numeric,
   thigh_cm numeric,
+  -- Campi Bussola di Ricomposizione (nullable: non ogni misurazione è
+  -- un check-in bussola completo).
+  hip_cm numeric, -- richiesto lato form solo se profilo.sex = 'f'
+  kcal_period numeric, -- kcal totali dal check-in precedente a questo
+  neck_feel smallint check (neck_feel in (-1, 0, 1)), -- -1 più pieno, 0 uguale, 1 più sottile
+  wrist_feel smallint check (wrist_feel in (-1, 0, 1)), -- -1 più stretto, 0 uguale, 1 più largo
+  -- Sesso dichiarato nel profilo AL MOMENTO di questo check-in
+  -- (snapshot, non un riferimento vivo a profiles.sex): se l'utente
+  -- corregge il sesso nel profilo in futuro, lo storico bussola resta
+  -- calcolato con il sesso corretto per ogni check-in — vedi addendum
+  -- sezione 7 "Cambio di sesso nel profilo tra un check-in e l'altro".
+  sex_at_checkin text check (sex_at_checkin in ('m', 'f')),
   created_at timestamptz default now(),
   unique (user_id, recorded_at)
 );

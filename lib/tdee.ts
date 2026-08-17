@@ -86,6 +86,30 @@ const KCAL_PER_G_CARBS = 4;
 const KCAL_PER_G_FAT = 9;
 
 /**
+ * BMR — formula di Mifflin-St Jeor (1990). Esportata separatamente da
+ * calculateTDEE perché riusata anche da lib/composition.ts (Bussola
+ * di Ricomposizione, vedi PRD-addendum-bussola-ricomposizione.md
+ * sezione 4), che ha bisogno di BMR/TDEE "nudi" senza obiettivo/regime.
+ */
+export function calculateBMR(sex: Sex, weightKg: number, heightCm: number, age: number): number {
+  const sexOffset = sex === "m" ? 5 : -161;
+  return 10 * weightKg + 6.25 * heightCm - 5 * age + sexOffset;
+}
+
+/** TDEE di mantenimento = BMR * moltiplicatore di attività. */
+export function calculateMaintenanceTDEE(
+  sex: Sex,
+  weightKg: number,
+  heightCm: number,
+  age: number,
+  activityLevel: ActivityLevel
+): { bmr: number; tdee: number } {
+  const bmr = calculateBMR(sex, weightKg, heightCm, age);
+  const tdee = bmr * ACTIVITY_MULTIPLIERS[activityLevel];
+  return { bmr: Math.round(bmr), tdee: Math.round(tdee) };
+}
+
+/**
  * Calcola BMR (Mifflin-St Jeor), TDEE e target macro. Le kcal target
  * derivano da tdee + MODE_KCAL_ADJUSTMENT[mode]; i grammi di
  * carbo/proteine/grassi derivano da quelle kcal applicando lo split
@@ -95,8 +119,7 @@ const KCAL_PER_G_FAT = 9;
 export function calculateTDEE(input: TDEEInput): TDEEResult {
   const { sex, weightKg, heightCm, age, activityLevel, mode, dietaryRegime } = input;
 
-  const sexOffset = sex === "m" ? 5 : -161;
-  const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + sexOffset;
+  const bmr = calculateBMR(sex, weightKg, heightCm, age);
   const tdee = bmr * ACTIVITY_MULTIPLIERS[activityLevel];
 
   const dailyKcal = Math.round(tdee * (1 + MODE_KCAL_ADJUSTMENT[mode]));
