@@ -11,17 +11,20 @@
 //   sedentario ×1,2 · lievemente attivo ×1,375 · moderatamente
 //   attivo ×1,55 · molto attivo ×1,725 · estremamente attivo ×1,9
 //
-// Poi split macro in base al tipo di dieta scelto dall'utente (vedi
-// lib/nutrition-options.ts — lista aperta, non derivata dal delta
-// peso attuale/obiettivo, per decisione esplicita del supervisore che
-// sovrascrive PRD-addendum-onboarding-form.md 2.1).
+// Le kcal target derivano da TDEE + aggiustamento per obiettivo
+// (dimagrimento/mantenimento/costruzione muscolare/recupero, vedi
+// MODE_KCAL_ADJUSTMENT). La DIVISIONE di quelle kcal in
+// carbo/proteine/grassi dipende invece dal regime alimentare scelto
+// (mediterraneo, keto, ecc. — vedi macroSplitForRegime in
+// lib/nutrition-options.ts): due assi indipendenti, "quante kcal" e
+// "come si dividono".
 //
 // In futuro è previsto affiancare a Mifflin-St Jeor altre formule di
 // calcolo del dispendio calorico (es. Harris-Benedict) selezionabili
 // dall'utente — non ancora implementato, fuori scope di questa fase.
 // ============================================================
 
-import type { DietMode } from "./nutrition-options";
+import { macroSplitForRegime, type DietMode, type DietaryRegime } from "./nutrition-options";
 
 export type Sex = "m" | "f";
 
@@ -41,14 +44,15 @@ export interface TDEEInput {
   age: number;
   activityLevel: ActivityLevel;
   mode: GoalMode;
+  dietaryRegime: DietaryRegime;
 }
 
 export interface TDEEResult {
-  /** Basal Metabolic Rate, kcal/giorno */
+  /** Basal Metabolic Rate, kcal/giorno — dispendio a riposo. */
   bmr: number;
-  /** Total Daily Energy Expenditure a mantenimento, kcal/giorno */
+  /** Total Daily Energy Expenditure a mantenimento, kcal/giorno (BMR * attività). */
   tdee: number;
-  /** Target calorico giornaliero in base al mode scelto */
+  /** Target calorico giornaliero per l'obiettivo scelto (tdee + MODE_KCAL_ADJUSTMENT). */
   dailyKcal: number;
   proteinG: number;
   carbsG: number;
@@ -77,28 +81,19 @@ export const MODE_KCAL_ADJUSTMENT: Record<GoalMode, number> = {
   recupero: 0.05,
 };
 
-// Proteine g/kg di peso corporeo. Più alte in deficit per
-// preservare la massa magra, leggermente più basse in surplus.
-export const PROTEIN_G_PER_KG: Record<GoalMode, number> = {
-  dimagrimento: 2.2,
-  mantenimento: 2.0,
-  costruzione_muscolare: 1.8,
-  recupero: 2.0,
-};
-
-// Quota di kcal giornaliere da grassi (25-30% consigliato, usiamo 28%).
-export const FAT_KCAL_FRACTION = 0.28;
-
 const KCAL_PER_G_PROTEIN = 4;
 const KCAL_PER_G_CARBS = 4;
 const KCAL_PER_G_FAT = 9;
 
 /**
- * Calcola BMR (Mifflin-St Jeor), TDEE e target macro in base al
- * mode scelto. Pura: nessun accesso a DB/rete, facilmente testabile.
+ * Calcola BMR (Mifflin-St Jeor), TDEE e target macro. Le kcal target
+ * derivano da tdee + MODE_KCAL_ADJUSTMENT[mode]; i grammi di
+ * carbo/proteine/grassi derivano da quelle kcal applicando lo split
+ * percentuale del regime alimentare (macroSplitForRegime). Pura:
+ * nessun accesso a DB/rete, facilmente testabile.
  */
 export function calculateTDEE(input: TDEEInput): TDEEResult {
-  const { sex, weightKg, heightCm, age, activityLevel, mode } = input;
+  const { sex, weightKg, heightCm, age, activityLevel, mode, dietaryRegime } = input;
 
   const sexOffset = sex === "m" ? 5 : -161;
   const bmr = 10 * weightKg + 6.25 * heightCm - 5 * age + sexOffset;
@@ -106,14 +101,10 @@ export function calculateTDEE(input: TDEEInput): TDEEResult {
 
   const dailyKcal = Math.round(tdee * (1 + MODE_KCAL_ADJUSTMENT[mode]));
 
-  const proteinG = Math.round(PROTEIN_G_PER_KG[mode] * weightKg);
-  const proteinKcal = proteinG * KCAL_PER_G_PROTEIN;
-
-  const fatKcal = dailyKcal * FAT_KCAL_FRACTION;
-  const fatG = Math.round(fatKcal / KCAL_PER_G_FAT);
-
-  const remainingKcal = Math.max(dailyKcal - proteinKcal - fatG * KCAL_PER_G_FAT, 0);
-  const carbsG = Math.round(remainingKcal / KCAL_PER_G_CARBS);
+  const split = macroSplitForRegime(dietaryRegime);
+  const proteinG = Math.round((dailyKcal * (split.proteinPct / 100)) / KCAL_PER_G_PROTEIN);
+  const fatG = Math.round((dailyKcal * (split.fatPct / 100)) / KCAL_PER_G_FAT);
+  const carbsG = Math.round((dailyKcal * (split.carbPct / 100)) / KCAL_PER_G_CARBS);
 
   return {
     bmr: Math.round(bmr),

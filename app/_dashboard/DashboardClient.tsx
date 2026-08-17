@@ -13,13 +13,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import MacroProgressBar from "../diario/MacroProgressBar";
-import WeightChart from "./WeightChart";
+import TrendChart from "./TrendChart";
 import StatTile from "./StatTile";
 import HabitStreakCard from "./HabitStreakCard";
 
 interface DashboardData {
   profile: { fullName: string | null; dietaryRegimeLabel: string };
   target: { modeLabel: string; dailyKcal: number; proteinG: number; carbsG: number; fatG: number } | null;
+  maintenance: { bmr: number; tdee: number } | null;
   todayMacros: {
     consumed: { kcal: number; protein_g: number; carbs_g: number; fat_g: number };
     target: { daily_kcal: number; protein_g: number; carbs_g: number; fat_g: number } | null;
@@ -32,6 +33,12 @@ interface DashboardData {
     weeksToGoal: number | null;
     estimatedDate: string | null;
     history: { date: string; weightKg: number }[];
+  };
+  bmi: { value: number; category: string } | null;
+  bodyIndex: {
+    current: number | null;
+    trendPerWeek: number | null;
+    history: { date: string; index: number }[];
   };
   habits: {
     id: string;
@@ -114,7 +121,7 @@ export default function DashboardClient() {
     );
   }
 
-  const { profile, target, todayMacros, weight, habits, activity, goals } = data;
+  const { profile, target, maintenance, todayMacros, weight, bmi, bodyIndex, habits, activity, goals } = data;
 
   return (
     <main className="min-h-screen w-full" style={{ backgroundColor: colors.background, color: colors.textPrimary }}>
@@ -161,7 +168,48 @@ export default function DashboardClient() {
               }
             />
           </div>
-          <WeightChart history={weight.history} goal={weight.goal} />
+          <TrendChart
+            history={weight.history.map((h) => ({ date: h.date, value: h.weightKg }))}
+            referenceValue={weight.goal}
+            referenceLabel={weight.goal !== null ? `Obiettivo ${weight.goal}kg` : undefined}
+            formatValue={(v) => `${v} kg`}
+          />
+        </section>
+
+        {/* Composizione corporea: BMI + Indice Corporeo IterUp */}
+        <section style={cardStyle}>
+          <h2 style={sectionTitleStyle}>Composizione corporea</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4" style={{ gap: spacing.sm, marginBottom: spacing.md }}>
+            <StatTile
+              label="BMI"
+              value={bmi ? String(bmi.value) : "—"}
+              sublabel={bmi ? bmi.category : "peso o altezza mancanti"}
+            />
+            <StatTile
+              label="Indice Corporeo IterUp"
+              value={bodyIndex.current !== null ? String(bodyIndex.current) : "—"}
+              sublabel="peso + circonferenze, base 100"
+            />
+            <StatTile
+              label="Trend indice"
+              value={
+                bodyIndex.trendPerWeek !== null
+                  ? `${bodyIndex.trendPerWeek > 0 ? "+" : ""}${bodyIndex.trendPerWeek}/sett.`
+                  : "—"
+              }
+              sublabel={bodyIndex.trendPerWeek !== null && bodyIndex.trendPerWeek < 0 ? "in calo" : bodyIndex.trendPerWeek !== null ? "in salita" : undefined}
+            />
+          </div>
+          <p style={{ color: colors.textMuted, fontSize: font.size.xs, marginBottom: spacing.sm }}>
+            L&apos;Indice Corporeo IterUp combina peso e circonferenze (vita 35%, peso 30%, coscia 15%, collo 12%,
+            petto 8%) indicizzate a 100 sul primo dato disponibile: più stabile del solo peso per seguire la
+            ricomposizione corporea nel tempo.
+          </p>
+          <TrendChart
+            history={bodyIndex.history.map((h) => ({ date: h.date, value: h.index }))}
+            formatValue={(v) => String(v)}
+            emptyLabel="Servono più misurazioni (peso + circonferenze) per calcolare l'indice."
+          />
         </section>
 
         {/* Target di oggi */}
@@ -169,6 +217,18 @@ export default function DashboardClient() {
           <h2 style={sectionTitleStyle}>Target di oggi</h2>
           {target ? (
             <div className="flex flex-col" style={{ gap: spacing.md }}>
+              {maintenance && (
+                <div className="grid grid-cols-3" style={{ gap: spacing.sm }}>
+                  <StatTile label="BMR (basale)" value={`${maintenance.bmr} kcal`} sublabel="a riposo" />
+                  <StatTile label="TDEE (mantenimento)" value={`${maintenance.tdee} kcal`} sublabel="per restare stabile" />
+                  <StatTile
+                    label="Obiettivo"
+                    value={`${target.dailyKcal} kcal`}
+                    sublabel={target.modeLabel}
+                    accent={colors.primary}
+                  />
+                </div>
+              )}
               <MacroProgressBar
                 label="Calorie"
                 unit="kcal"

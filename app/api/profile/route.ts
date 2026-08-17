@@ -246,7 +246,8 @@ export async function POST(request: Request) {
     );
   }
 
-  // 3. calcola TDEE e target macro
+  // 3. calcola TDEE e target macro (lo split carbo/proteine/grassi
+  // dipende dal regime alimentare, vedi lib/nutrition-options.ts)
   const tdeeResult = calculateTDEE({
     sex,
     weightKg,
@@ -254,6 +255,7 @@ export async function POST(request: Request) {
     age,
     activityLevel,
     mode,
+    dietaryRegime,
   });
 
   // 4. disattiva i target precedenti, poi inserisce il nuovo target attivo

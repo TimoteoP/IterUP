@@ -1,11 +1,12 @@
 "use client";
 
 // ============================================================
-// IterUp — grafico peso nel tempo (dashboard)
+// IterUp — grafico lineare generico nel tempo (dashboard)
 // ------------------------------------------------------------
-// Linea singola (nessuna legenda necessaria, il titolo la nomina),
-// 2px, crosshair+tooltip al passaggio del mouse, linea tratteggiata
-// per l'obiettivo se impostato. Segue references/marks-and-anatomy.md
+// Riusato per peso e per l'Indice Corporeo IterUp. Linea singola
+// (nessuna legenda necessaria, il titolo la nomina), 2px, crosshair+
+// tooltip al passaggio del mouse, linea tratteggiata opzionale per un
+// riferimento (es. obiettivo). Segue references/marks-and-anatomy.md
 // e interaction.md della skill dataviz: hairline gridlines, area fill
 // ~10% opacità, marker di fine ≥8px con anello 2px colore superficie.
 // ============================================================
@@ -13,14 +14,19 @@
 import { useMemo, useRef, useState } from "react";
 import { colors, font, spacing } from "@/lib/design-tokens";
 
-interface WeightPoint {
+interface TrendPoint {
   date: string;
-  weightKg: number;
+  value: number;
 }
 
-interface WeightChartProps {
-  history: WeightPoint[];
-  goal: number | null;
+interface TrendChartProps {
+  history: TrendPoint[];
+  /** Linea di riferimento tratteggiata opzionale (es. peso obiettivo). */
+  referenceValue?: number | null;
+  referenceLabel?: string;
+  /** Formattazione del valore nel tooltip e sulle gridline. */
+  formatValue?: (v: number) => string;
+  emptyLabel?: string;
 }
 
 const WIDTH = 600;
@@ -31,17 +37,24 @@ function formatDateShort(iso: string): string {
   return new Date(iso + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short" });
 }
 
-export default function WeightChart({ history, goal }: WeightChartProps) {
+export default function TrendChart({
+  history,
+  referenceValue = null,
+  referenceLabel,
+  formatValue = (v) => `${v}`,
+  emptyLabel = "Nessun dato registrato ancora.",
+}: TrendChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
   const { points, minY, maxY } = useMemo(() => {
-    if (history.length === 0) return { points: [] as { x: number; y: number; date: string; weightKg: number }[], minY: 0, maxY: 1 };
+    if (history.length === 0)
+      return { points: [] as { x: number; y: number; date: string; value: number }[], minY: 0, maxY: 1 };
 
-    const values = history.map((h) => h.weightKg);
-    const goalValues = goal !== null ? [...values, goal] : values;
-    const rawMin = Math.min(...goalValues);
-    const rawMax = Math.max(...goalValues);
+    const values = history.map((h) => h.value);
+    const refValues = referenceValue !== null ? [...values, referenceValue] : values;
+    const rawMin = Math.min(...refValues);
+    const rawMax = Math.max(...refValues);
     const margin = Math.max((rawMax - rawMin) * 0.15, 1);
     const minY = rawMin - margin;
     const maxY = rawMax + margin;
@@ -51,19 +64,15 @@ export default function WeightChart({ history, goal }: WeightChartProps) {
 
     const points = history.map((h, i) => {
       const x = PAD.left + (history.length === 1 ? innerW / 2 : (i / (history.length - 1)) * innerW);
-      const y = PAD.top + innerH - ((h.weightKg - minY) / (maxY - minY)) * innerH;
-      return { x, y, date: h.date, weightKg: h.weightKg };
+      const y = PAD.top + innerH - ((h.value - minY) / (maxY - minY)) * innerH;
+      return { x, y, date: h.date, value: h.value };
     });
 
     return { points, minY, maxY };
-  }, [history, goal]);
+  }, [history, referenceValue]);
 
   if (history.length === 0) {
-    return (
-      <p style={{ color: colors.textMuted, fontSize: font.size.sm }}>
-        Nessuna misurazione registrata ancora.
-      </p>
-    );
+    return <p style={{ color: colors.textMuted, fontSize: font.size.sm }}>{emptyLabel}</p>;
   }
 
   const innerH = HEIGHT - PAD.top - PAD.bottom;
@@ -106,41 +115,27 @@ export default function WeightChart({ history, goal }: WeightChartProps) {
         {/* Gridlines: hairline, recessive */}
         {gridLines.map((v, i) => (
           <g key={i}>
-            <line
-              x1={PAD.left}
-              x2={WIDTH - PAD.right}
-              y1={yForValue(v)}
-              y2={yForValue(v)}
-              stroke={colors.border}
-              strokeWidth={1}
-            />
-            <text
-              x={PAD.left - 8}
-              y={yForValue(v)}
-              textAnchor="end"
-              dominantBaseline="middle"
-              fontSize={10}
-              fill={colors.textMuted}
-            >
-              {Math.round(v)}
+            <line x1={PAD.left} x2={WIDTH - PAD.right} y1={yForValue(v)} y2={yForValue(v)} stroke={colors.border} strokeWidth={1} />
+            <text x={PAD.left - 8} y={yForValue(v)} textAnchor="end" dominantBaseline="middle" fontSize={10} fill={colors.textMuted}>
+              {formatValue(Math.round(v * 10) / 10)}
             </text>
           </g>
         ))}
 
-        {/* Linea obiettivo, tratteggiata */}
-        {goal !== null && (
+        {/* Linea di riferimento, tratteggiata */}
+        {referenceValue !== null && (
           <g>
             <line
               x1={PAD.left}
               x2={WIDTH - PAD.right}
-              y1={yForValue(goal)}
-              y2={yForValue(goal)}
+              y1={yForValue(referenceValue)}
+              y2={yForValue(referenceValue)}
               stroke={colors.accent}
               strokeWidth={1}
               strokeDasharray="4 4"
             />
-            <text x={WIDTH - PAD.right} y={yForValue(goal) - 4} textAnchor="end" fontSize={10} fill={colors.accent}>
-              Obiettivo {goal}kg
+            <text x={WIDTH - PAD.right} y={yForValue(referenceValue) - 4} textAnchor="end" fontSize={10} fill={colors.accent}>
+              {referenceLabel ?? formatValue(referenceValue)}
             </text>
           </g>
         )}
@@ -152,7 +147,14 @@ export default function WeightChart({ history, goal }: WeightChartProps) {
         <path d={linePath} fill="none" stroke={colors.primary} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
 
         {/* Marker di fine, >=8px, anello colore superficie */}
-        <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={5} fill={colors.primary} stroke={colors.surface} strokeWidth={2} />
+        <circle
+          cx={points[points.length - 1].x}
+          cy={points[points.length - 1].y}
+          r={5}
+          fill={colors.primary}
+          stroke={colors.surface}
+          strokeWidth={2}
+        />
 
         {/* Crosshair + hover point */}
         {hover && (
@@ -179,7 +181,7 @@ export default function WeightChart({ history, goal }: WeightChartProps) {
           }}
         >
           <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: colors.textPrimary }}>
-            {hover.weightKg} kg
+            {formatValue(hover.value)}
           </div>
           <div style={{ fontSize: font.size.xs, color: colors.textMuted }}>{formatDateShort(hover.date)}</div>
         </div>

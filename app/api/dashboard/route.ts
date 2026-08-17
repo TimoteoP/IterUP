@@ -10,6 +10,8 @@ import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import { DIET_MODES, dietaryRegimeLabel } from "@/lib/nutrition-options";
+import { calculateTDEE, calculateAge, type ActivityLevel, type Sex } from "@/lib/tdee";
+import { calculateBMI, bmiCategory, calculateBodyIndex } from "@/lib/body-indices";
 
 export const dynamic = "force-dynamic";
 
@@ -67,7 +69,11 @@ export async function GET() {
     goalsResult,
     dailyLogsResult,
   ] = await Promise.all([
-    supabaseServer.from("profiles").select("full_name, dietary_regime").eq("id", CURRENT_USER_ID).maybeSingle(),
+    supabaseServer
+      .from("profiles")
+      .select("full_name, dietary_regime, sex, birth_date, height_cm, activity_level")
+      .eq("id", CURRENT_USER_ID)
+      .maybeSingle(),
     supabaseServer
       .from("user_targets")
       .select("mode, daily_kcal, protein_g, carbs_g, fat_g")
@@ -78,9 +84,8 @@ export async function GET() {
       .maybeSingle(),
     supabaseServer
       .from("body_metrics")
-      .select("recorded_at, weight_kg")
+      .select("recorded_at, weight_kg, neck_cm, chest_cm, waist_cm, thigh_cm")
       .eq("user_id", CURRENT_USER_ID)
-      .not("weight_kg", "is", null)
       .order("recorded_at", { ascending: true }),
     supabaseServer
       .from("goals")
@@ -140,16 +145,20 @@ export async function GET() {
   }
 
   // ---- Peso: trend + proiezione verso l'obiettivo ----
-  const weightHistory = weightHistoryResult.data ?? [];
+  const bodyMetricsHistory = weightHistoryResult.data ?? [];
+  const weightHistory = bodyMetricsHistory.filter((r) => r.weight_kg !== null) as {
+    recorded_at: string;
+    weight_kg: number;
+  }[];
   const currentWeight = weightHistory.length > 0 ? weightHistory[weightHistory.length - 1].weight_kg : null;
   const goalWeight = weightGoalResult.data?.target_value ?? null;
 
-  const firstDate = weightHistory[0]?.recorded_at;
-  const points = firstDate
+  const firstWeightDate = weightHistory[0]?.recorded_at;
+  const points = firstWeightDate
     ? weightHistory.map((row) => ({
-        x: (new Date(row.recorded_at + "T00:00:00Z").getTime() - new Date(firstDate + "T00:00:00Z").getTime()) /
+        x: (new Date(row.recorded_at + "T00:00:00Z").getTime() - new Date(firstWeightDate + "T00:00:00Z").getTime()) /
           86400000,
-        y: row.weight_kg as number,
+        y: row.weight_kg,
       }))
     : [];
   const slopePerDay = linearSlope(points);
@@ -237,6 +246,59 @@ export async function GET() {
     };
   });
 
+  // ---- BMI ----
+  const profile = profileResult.data;
+  const bmi =
+    currentWeight !== null && profile?.height_cm
+      ? { value: calculateBMI(currentWeight, profile.height_cm), category: bmiCategory(calculateBMI(currentWeight, profile.height_cm)) }
+      : null;
+
+  // ---- Indice Corporeo IterUp: peso + circonferenze, pesati per reattività al dimagrimento (vedi lib/body-indices.ts) ----
+  const bodyIndexHistory = calculateBodyIndex(
+    bodyMetricsHistory.map((r) => ({
+      date: r.recorded_at,
+      weightKg: r.weight_kg,
+      neckCm: r.neck_cm,
+      chestCm: r.chest_cm,
+      waistCm: r.waist_cm,
+      thighCm: r.thigh_cm,
+    }))
+  );
+  const currentBodyIndex = bodyIndexHistory.length > 0 ? bodyIndexHistory[bodyIndexHistory.length - 1].index : null;
+  const firstIndexDate = bodyIndexHistory[0]?.date;
+  const bodyIndexSlopePerDay = firstIndexDate
+    ? linearSlope(
+        bodyIndexHistory.map((p) => ({
+          x: (new Date(p.date + "T00:00:00Z").getTime() - new Date(firstIndexDate + "T00:00:00Z").getTime()) / 86400000,
+          y: p.index,
+        }))
+      )
+    : null;
+  const bodyIndexTrendPerWeek = bodyIndexSlopePerDay !== null ? Math.round(bodyIndexSlopePerDay * 7 * 100) / 100 : null;
+
+  // ---- BMR/TDEE di mantenimento, sempre ricalcolati dal profilo/peso
+  // attuale (non salvati in user_targets: quella tabella ha solo le
+  // kcal già adattate all'obiettivo) ----
+  let maintenance: { bmr: number; tdee: number } | null = null;
+  if (
+    profile?.sex &&
+    profile.birth_date &&
+    profile.height_cm &&
+    profile.activity_level &&
+    currentWeight !== null
+  ) {
+    const r = calculateTDEE({
+      sex: profile.sex as Sex,
+      weightKg: currentWeight,
+      heightCm: profile.height_cm,
+      age: calculateAge(profile.birth_date),
+      activityLevel: profile.activity_level as ActivityLevel,
+      mode: targetResult.data?.mode ?? "mantenimento",
+      dietaryRegime: profile.dietary_regime ?? "mediterraneo",
+    });
+    maintenance = { bmr: r.bmr, tdee: r.tdee };
+  }
+
   // ---- Target/macro di oggi ----
   const target = targetResult.data;
   const consumed = (dailyLogsResult.data ?? []).reduce(
@@ -263,6 +325,7 @@ export async function GET() {
           fatG: target.fat_g,
         }
       : null,
+    maintenance,
     todayMacros: { consumed, target: target ?? null },
     weight: {
       current: currentWeight,
@@ -272,6 +335,12 @@ export async function GET() {
       weeksToGoal,
       estimatedDate,
       history: weightHistory.map((r) => ({ date: r.recorded_at, weightKg: r.weight_kg })),
+    },
+    bmi,
+    bodyIndex: {
+      current: currentBodyIndex,
+      trendPerWeek: bodyIndexTrendPerWeek,
+      history: bodyIndexHistory,
     },
     habits: habitStats,
     activity: { stepsToday, stepsWeek, stepsMonth, workoutsWeek, workoutMinutesWeek },

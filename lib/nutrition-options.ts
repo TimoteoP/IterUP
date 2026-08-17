@@ -46,6 +46,42 @@ export function dietaryRegimeLabel(value: string): string {
   return DIETARY_REGIME_PRESETS.find((r) => r.value === value)?.label ?? value;
 }
 
+export interface MacroSplit {
+  /** % di kcal giornaliere da carboidrati/proteine/grassi. Somma a 100. */
+  carbPct: number;
+  proteinPct: number;
+  fatPct: number;
+}
+
+// Split macro per regime alimentare, su indicazione esplicita
+// dell'utente (es. Keto 10/35/55, Mediterranea 55/30/15). Valori per
+// i regimi non elencati esplicitamente dall'utente sono una stima
+// ragionevole del supervisore, non uno standard nutrizionale
+// certificato — rivedibili. Il regime determina COME si dividono le
+// kcal target (già calcolate da TDEE + obiettivo, vedi lib/tdee.ts),
+// non le kcal stesse.
+const REGIME_MACRO_SPLITS: Record<string, MacroSplit> = {
+  mediterraneo: { carbPct: 55, proteinPct: 30, fatPct: 15 },
+  keto: { carbPct: 10, proteinPct: 35, fatPct: 55 },
+  paleo: { carbPct: 30, proteinPct: 35, fatPct: 35 },
+  high_carb: { carbPct: 65, proteinPct: 20, fatPct: 15 },
+  vegano: { carbPct: 55, proteinPct: 20, fatPct: 25 },
+  vegetariano: { carbPct: 50, proteinPct: 25, fatPct: 25 },
+  fruttariano: { carbPct: 80, proteinPct: 8, fatPct: 12 },
+  crudista: { carbPct: 50, proteinPct: 20, fatPct: 30 },
+  low_carb: { carbPct: 20, proteinPct: 35, fatPct: 45 },
+  chetogenica_ciclica: { carbPct: 15, proteinPct: 30, fatPct: 55 },
+};
+
+// Split di fallback per regimi custom creati liberamente dall'utente
+// (non in REGIME_MACRO_SPLITS): un mix bilanciato, non specifico.
+const DEFAULT_MACRO_SPLIT: MacroSplit = { carbPct: 45, proteinPct: 30, fatPct: 25 };
+
+/** Split macro (% carb/proteine/grassi) per un regime: preset noto o fallback bilanciato. */
+export function macroSplitForRegime(regime: string): MacroSplit {
+  return REGIME_MACRO_SPLITS[regime] ?? DEFAULT_MACRO_SPLIT;
+}
+
 export const MEAL_TYPES = [
   { value: "colazione", label: "Colazione" },
   { value: "pranzo", label: "Pranzo" },
