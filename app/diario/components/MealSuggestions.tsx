@@ -13,6 +13,7 @@
 
 import { useState } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
+import { apiFetch } from "@/lib/api-client";
 
 interface ValidatedIngredient {
   alimento: string;
@@ -55,7 +56,7 @@ export default function MealSuggestions({ mealType, logDate, onLogged }: MealSug
     setError(null);
     setData(null);
     try {
-      const res = await fetch("/api/suggest-meal", {
+      const res = await apiFetch("/api/suggest-meal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mealType }),
@@ -75,7 +76,7 @@ export default function MealSuggestions({ mealType, logDate, onLogged }: MealSug
     setError(null);
     try {
       for (const ing of proposal.ingredienti) {
-        const res = await fetch("/api/logs", {
+        const res = await apiFetch("/api/logs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -103,7 +104,7 @@ export default function MealSuggestions({ mealType, logDate, onLogged }: MealSug
   async function vote(proposal: ValidatedProposal, index: number, liked: boolean) {
     setVotedIndexes((prev) => ({ ...prev, [index]: liked }));
     try {
-      await fetch("/api/suggest-meal/feedback", {
+      await apiFetch("/api/suggest-meal/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ mealType, modelUsed: data?.modelUsed ?? null, proposal, liked }),

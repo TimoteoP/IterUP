@@ -16,6 +16,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import { callOpenRouterJSON } from "@/lib/openrouter";
 import { DIET_MODES, dietaryRegimeLabel, type MealType } from "@/lib/nutrition-options";
+import { requireWriteAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +128,9 @@ Rispondi SOLO con il JSON conforme allo schema, nessun altro testo.`;
 }
 
 export async function POST(request: NextRequest) {
+  const authError = requireWriteAuth(request);
+  if (authError) return authError;
+
   let body: unknown;
   try {
     body = await request.json();

@@ -11,6 +11,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import type { Tables } from "@/lib/types";
+import { apiFetch } from "@/lib/api-client";
 
 type ChatMessage = Tables<"supplement_chat_messages">;
 
@@ -63,7 +64,7 @@ export default function SupplementChat() {
     setError(null);
     setInput("");
     try {
-      const res = await fetch("/api/supplements/chat", {
+      const res = await apiFetch("/api/supplements/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),

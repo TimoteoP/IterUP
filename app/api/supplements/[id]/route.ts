@@ -6,10 +6,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import type { TablesUpdate } from "@/lib/types";
+import { requireWriteAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  const authError = requireWriteAuth(request);
+  if (authError) return authError;
+
   const body = await request.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ error: "Body JSON non valido" }, { status: 400 });
@@ -39,7 +43,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   return NextResponse.json({ supplement: data });
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  const authError = requireWriteAuth(request);
+  if (authError) return authError;
+
   const { error, count } = await supabaseServer
     .from("supplements")
     .delete({ count: "exact" })

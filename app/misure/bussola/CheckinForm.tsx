@@ -17,6 +17,7 @@ import { useState, type FormEvent } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import { NECK_WRIST_FEEL_OPTIONS } from "@/lib/composition";
 import { WEIGHT_RANGE, CIRCUMFERENCE_RANGE, todayISODate } from "@/app/api/body-metrics/validation";
+import { apiFetch } from "@/lib/api-client";
 
 interface CheckinFormProps {
   sex: "m" | "f" | null;
@@ -101,7 +102,7 @@ export default function CheckinForm({ sex, onSaved }: CheckinFormProps) {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/composition/checkin", {
+      const res = await apiFetch("/api/composition/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

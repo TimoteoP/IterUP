@@ -12,6 +12,7 @@
 
 import { useState, type FormEvent } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
+import { apiFetch } from "@/lib/api-client";
 import {
   ACTIVITY_LEVEL_OPTIONS,
   HEIGHT_CM_RANGE,
@@ -136,7 +137,7 @@ export default function ProfileForm({
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/profile", {
+      const res = await apiFetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

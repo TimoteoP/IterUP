@@ -8,11 +8,15 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
+import { requireWriteAuth } from "@/lib/api-auth";
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
+  const authError = requireWriteAuth(request);
+  if (authError) return authError;
+
   const { id } = params;
 
   if (!id) {

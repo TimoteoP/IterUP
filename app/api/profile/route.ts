@@ -25,6 +25,7 @@ import {
   type GoalMode,
 } from "@/lib/tdee";
 import { isDietMode, isDietaryRegime, type DietaryRegime } from "@/lib/nutrition-options";
+import { requireWriteAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -174,6 +175,9 @@ function validatePayload(body: unknown): { data: ProfilePayload } | { error: str
 }
 
 export async function POST(request: Request) {
+  const authError = requireWriteAuth(request);
+  if (authError) return authError;
+
   let rawBody: unknown;
   try {
     rawBody = await request.json();

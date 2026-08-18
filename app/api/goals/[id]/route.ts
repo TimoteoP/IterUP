@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import type { Tables, TablesUpdate } from "@/lib/types";
 import { supabaseServer } from "@/lib/supabase/server";
+import { requireWriteAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const authError = requireWriteAuth(request);
+  if (authError) return authError;
+
   const body = await request.json().catch(() => null);
 
   if (!body) {
@@ -75,9 +79,12 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const authError = requireWriteAuth(request);
+  if (authError) return authError;
+
   const { error } = await supabaseServer.from("goals")
     .delete()
     .eq("id", params.id)

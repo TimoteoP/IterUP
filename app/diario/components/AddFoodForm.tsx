@@ -11,6 +11,7 @@
 import { useState, type FormEvent } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import type { FoodResult } from "../types";
+import { apiFetch } from "@/lib/api-client";
 
 interface AddFoodFormProps {
   initialName?: string;
@@ -61,7 +62,7 @@ export default function AddFoodForm({ initialName, onCreated, onCancel }: AddFoo
 
     setSaving(true);
     try {
-      const res = await fetch("/api/foods", {
+      const res = await apiFetch("/api/foods", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

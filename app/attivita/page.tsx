@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import type { Tables } from "@/lib/types";
+import { apiFetch } from "@/lib/api-client";
 
 type ActivityLog = Tables<"activity_logs">;
 
@@ -140,7 +141,7 @@ export default function AttivitaPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/activity/create", {
+      const res = await apiFetch("/api/activity/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -168,7 +169,7 @@ export default function AttivitaPage() {
   async function handleDelete(id: string) {
     setError(null);
     try {
-      const res = await fetch(`/api/activity/delete?id=${id}`, {
+      const res = await apiFetch(`/api/activity/delete?id=${id}`, {
         method: "DELETE",
       });
       const json = await res.json();

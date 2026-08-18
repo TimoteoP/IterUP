@@ -11,6 +11,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { colors, radius, spacing, font } from "@/lib/design-tokens";
 import type { Tables } from "@/lib/types";
+import { apiFetch } from "@/lib/api-client";
 
 // current_value/progress_pct: calcolati a runtime da GET /api/goals
 // dai dati reali (peso/passi/streak abitudine), non persistiti — vedi
@@ -75,7 +76,7 @@ export default function ObiettiviPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/goals", {
+      const res = await apiFetch("/api/goals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -102,7 +103,7 @@ export default function ObiettiviPage() {
   async function changeStatus(goal: Goal, status: GoalStatus) {
     setError(null);
     try {
-      const res = await fetch(`/api/goals/${goal.id}`, {
+      const res = await apiFetch(`/api/goals/${goal.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
@@ -119,7 +120,7 @@ export default function ObiettiviPage() {
     if (!confirm(`Eliminare l'obiettivo "${goal.title}"?`)) return;
     setError(null);
     try {
-      const res = await fetch(`/api/goals/${goal.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/goals/${goal.id}`, { method: "DELETE" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Errore nell'eliminazione");
       setGoals((prev) => prev.filter((g) => g.id !== goal.id));

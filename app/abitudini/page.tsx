@@ -12,6 +12,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { colors, radius, spacing, font } from "@/lib/design-tokens";
 import type { Tables } from "@/lib/types";
+import { apiFetch } from "@/lib/api-client";
 
 type Habit = Tables<"habits">;
 type HabitLog = Tables<"habit_logs">;
@@ -74,7 +75,7 @@ export default function AbitudiniPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch("/api/habits", {
+      const res = await apiFetch("/api/habits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -103,7 +104,7 @@ export default function AbitudiniPage() {
     const nextCompleted = !(current?.completed ?? false);
     setError(null);
     try {
-      const res = await fetch("/api/habits/log", {
+      const res = await apiFetch("/api/habits/log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -125,7 +126,7 @@ export default function AbitudiniPage() {
     const value = raw === undefined ? logs[habit.id]?.value ?? null : raw === "" ? null : Number(raw);
     setError(null);
     try {
-      const res = await fetch("/api/habits/log", {
+      const res = await apiFetch("/api/habits/log", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -150,7 +151,7 @@ export default function AbitudiniPage() {
   async function toggleActive(habit: Habit) {
     setError(null);
     try {
-      const res = await fetch(`/api/habits/${habit.id}`, {
+      const res = await apiFetch(`/api/habits/${habit.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_active: !habit.is_active }),
@@ -167,7 +168,7 @@ export default function AbitudiniPage() {
     if (!confirm(`Eliminare definitivamente "${habit.name}"? Verranno persi anche i log.`)) return;
     setError(null);
     try {
-      const res = await fetch(`/api/habits/${habit.id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/habits/${habit.id}`, { method: "DELETE" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Errore nell'eliminazione");
       await loadAll();

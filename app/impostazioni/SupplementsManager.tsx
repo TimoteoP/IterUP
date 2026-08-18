@@ -11,6 +11,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import type { Tables } from "@/lib/types";
+import { apiFetch } from "@/lib/api-client";
 
 type Supplement = Tables<"supplements">;
 
@@ -59,7 +60,7 @@ export default function SupplementsManager() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/supplements", {
+      const res = await apiFetch("/api/supplements", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, dosage, unit }),
@@ -79,7 +80,7 @@ export default function SupplementsManager() {
 
   async function handleDelete(id: string) {
     try {
-      const res = await fetch(`/api/supplements/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/supplements/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error ?? "Errore nella cancellazione");

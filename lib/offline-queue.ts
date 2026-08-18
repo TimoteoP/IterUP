@@ -17,6 +17,8 @@
 // (resta lo stesso record IndexedDB, non un duplicato).
 // ============================================================
 
+import { apiFetch } from "@/lib/api-client";
+
 const DB_NAME = "iterup-offline";
 const DB_VERSION = 1;
 const STORE_NAME = "logs-queue";
@@ -107,7 +109,7 @@ export async function flushQueue(): Promise<number> {
   let synced = 0;
   for (const item of items) {
     try {
-      const res = await fetch("/api/logs", {
+      const res = await apiFetch("/api/logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(item.payload),

@@ -7,6 +7,7 @@ import MealSuggestions from "./components/MealSuggestions";
 import AddFoodForm from "./components/AddFoodForm";
 import ExternalFoodSearch from "./components/ExternalFoodSearch";
 import { MEAL_TYPES_WITHOUT_FOOD } from "@/lib/nutrition-options";
+import { apiFetch } from "@/lib/api-client";
 import {
   generateClientId,
   enqueueLog,
@@ -252,7 +253,7 @@ export default function DiarioPage() {
 
     let networkError = false;
     try {
-      const res = await fetch("/api/logs", {
+      const res = await apiFetch("/api/logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -300,7 +301,7 @@ export default function DiarioPage() {
 
   async function handleDelete(id: string) {
     try {
-      const res = await fetch(`/api/logs/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/logs/${id}`, { method: "DELETE" });
       if (!res.ok) {
         const json = await res.json().catch(() => ({}));
         throw new Error(json.error ?? "Errore nella cancellazione");
@@ -332,7 +333,7 @@ export default function DiarioPage() {
     setLoggingFast(true);
     setAddError(null);
     try {
-      const res = await fetch("/api/logs", {
+      const res = await apiFetch("/api/logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ meal_type: type, logged_at: date }),

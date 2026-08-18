@@ -12,6 +12,7 @@
 import { useState } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import type { FoodResult } from "../types";
+import { apiFetch } from "@/lib/api-client";
 
 interface ExternalCandidate {
   source: "off";
@@ -59,7 +60,7 @@ export default function ExternalFoodSearch({ initialQuery, onImported, onCancel 
     setImportingId(candidate.source_id);
     setError(null);
     try {
-      const res = await fetch("/api/foods", {
+      const res = await apiFetch("/api/foods", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(candidate),

@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { colors, spacing, font } from "@/lib/design-tokens";
 import type { Tables } from "@/lib/types";
 import { WEIGHT_RANGE, CIRCUMFERENCE_RANGE, todayISODate } from "@/app/api/body-metrics/validation";
+import { apiFetch } from "@/lib/api-client";
 
 type BodyMetric = Tables<"body_metrics">;
 
@@ -142,7 +143,7 @@ export default function MisurePage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/body-metrics", {
+      const res = await apiFetch("/api/body-metrics", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -172,7 +173,7 @@ export default function MisurePage() {
     setSuccessMsg(null);
     setDeletingId(id);
     try {
-      const res = await fetch(`/api/body-metrics/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/body-metrics/${id}`, { method: "DELETE" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Errore nella cancellazione.");
       setHistory((prev) => prev.filter((row) => row.id !== id));

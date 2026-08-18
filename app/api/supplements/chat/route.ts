@@ -21,6 +21,7 @@ import { CURRENT_USER_ID } from "@/lib/config";
 import { callOpenRouter, type OpenRouterMessage } from "@/lib/openrouter";
 import { dietaryRegimeLabel } from "@/lib/nutrition-options";
 import type { TablesInsert, Json } from "@/lib/types";
+import { requireWriteAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -76,6 +77,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const authError = requireWriteAuth(request);
+  if (authError) return authError;
+
   const body = await request.json().catch(() => null);
   const message = typeof body?.message === "string" ? body.message.trim() : "";
   if (!message) {
