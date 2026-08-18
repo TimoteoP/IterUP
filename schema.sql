@@ -268,6 +268,23 @@ create index if not exists idx_meal_feedback_user on public.meal_suggestion_feed
 -- app/api/foods/route.ts) vanno semplicemente in `foods` con
 -- source = 'manual' invece di 'usda', per distinguerle nello storico.
 
+-- ------------------------------------------------------------
+-- 13. CHAT INTEGRATORI (con web search grounding)
+-- ------------------------------------------------------------
+-- Vedi PRD-addendum-hardening-completamento.md B1. citations è
+-- l'array di url_citation restituito da OpenRouter quando il modello
+-- usa la ricerca web (tools: [{"type":"openrouter:web_search"}]).
+create table if not exists public.supplement_chat_messages (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  role text not null check (role in ('user', 'assistant')),
+  content text not null,
+  citations jsonb not null default '[]',
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_supplement_chat_user_date on public.supplement_chat_messages(user_id, created_at);
+
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- ------------------------------------------------------------
@@ -286,6 +303,7 @@ alter table public.goals enable row level security;
 alter table public.foods enable row level security;
 alter table public.supplements enable row level security;
 alter table public.meal_suggestion_feedback enable row level security;
+alter table public.supplement_chat_messages enable row level security;
 
 create policy "foods_read_all" on public.foods for select using (true);
 create policy "foods_insert_all" on public.foods for insert with check (true);
@@ -299,6 +317,7 @@ create policy "habit_logs_own" on public.habit_logs for all using (auth.uid() = 
 create policy "goals_own" on public.goals for all using (auth.uid() = user_id);
 create policy "supplements_own" on public.supplements for all using (auth.uid() = user_id);
 create policy "meal_suggestion_feedback_own" on public.meal_suggestion_feedback for all using (auth.uid() = user_id);
+create policy "supplement_chat_messages_own" on public.supplement_chat_messages for all using (auth.uid() = user_id);
 
 -- ------------------------------------------------------------
 -- Setup una tantum: crea l'unico utente fisso dell'app

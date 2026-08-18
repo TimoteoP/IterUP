@@ -17,6 +17,7 @@ import { useRouter } from "next/navigation";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import ProfileForm, { PROFILE_FORM_INITIAL_STATE, type ProfileFormState } from "./ProfileForm";
 import SupplementsManager from "./SupplementsManager";
+import SupplementChat from "./SupplementChat";
 
 const cardStyle: React.CSSProperties = {
   backgroundColor: colors.surface,
@@ -168,6 +169,19 @@ export default function ImpostazioniPage() {
             Integratori
           </h2>
           <SupplementsManager />
+        </section>
+
+        <section style={cardStyle}>
+          <h2
+            style={{
+              fontSize: font.size.md,
+              fontWeight: font.weight.semibold,
+              marginBottom: spacing.md,
+            }}
+          >
+            Chat integratori
+          </h2>
+          <SupplementChat />
         </section>
 
         <section style={cardStyle}>

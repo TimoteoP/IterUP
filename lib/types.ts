@@ -474,6 +474,33 @@ export interface Database {
         };
         Relationships: [];
       };
+      supplement_chat_messages: {
+        Row: {
+          id: string;
+          user_id: string;
+          role: "user" | "assistant";
+          content: string;
+          citations: Json;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          role: "user" | "assistant";
+          content: string;
+          citations?: Json;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          role?: "user" | "assistant";
+          content?: string;
+          citations?: Json;
+          created_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

@@ -44,8 +44,16 @@ export interface OpenRouterCallLog {
   errorMessage?: string;
 }
 
+/** Citazione web da web search grounding (annotazione url_citation di OpenRouter). */
+export interface OpenRouterCitation {
+  url: string;
+  title?: string;
+}
+
 export interface OpenRouterCallResult {
   content: string;
+  /** Citazioni web se il modello ha usato tools: [{type: "openrouter:web_search"}]. */
+  citations: OpenRouterCitation[];
   log: OpenRouterCallLog;
 }
 
@@ -104,6 +112,24 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
   const modelUsed: string | null = json.model ?? null;
   const costUsd: number | null = json.usage?.cost ?? null;
 
+  // Annotazioni url_citation della risposta (web search grounding),
+  // vedi PRD-addendum-onboarding-form.md sezione 5.3. Lo shape esatto
+  // (nidificato in `url_citation` vs campi piatti) non è documentato
+  // in modo definitivo qui: gestiamo entrambe le forme in modo
+  // difensivo invece di assumerne una sola.
+  const rawAnnotations: unknown[] = json.choices?.[0]?.message?.annotations ?? [];
+  const citations: OpenRouterCitation[] = rawAnnotations
+    .map((a): OpenRouterCitation | null => {
+      if (typeof a !== "object" || a === null) return null;
+      const obj = a as Record<string, unknown>;
+      if (obj.type !== "url_citation") return null;
+      const nested = obj.url_citation as Record<string, unknown> | undefined;
+      const url = (nested?.url ?? obj.url) as string | undefined;
+      const title = (nested?.title ?? obj.title) as string | undefined;
+      return typeof url === "string" ? { url, title } : null;
+    })
+    .filter((c): c is OpenRouterCitation => c !== null);
+
   const log: OpenRouterCallLog = {
     modelsRequested: models,
     modelUsed,
@@ -117,7 +143,7 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
     throw Object.assign(new Error(errLog.errorMessage), { log: errLog });
   }
 
-  return { content, log };
+  return { content, citations, log };
 }
 
 /**
