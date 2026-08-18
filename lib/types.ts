@@ -501,6 +501,120 @@ export interface Database {
         };
         Relationships: [];
       };
+      coach_nudges: {
+        Row: {
+          id: string;
+          user_id: string;
+          trigger_type: string;
+          trigger_data: Json;
+          message: string;
+          tone_used: string | null;
+          shown_at: string | null;
+          reaction: "like" | "dislike" | "dismissed" | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          trigger_type: string;
+          trigger_data?: Json;
+          message: string;
+          tone_used?: string | null;
+          shown_at?: string | null;
+          reaction?: "like" | "dislike" | "dismissed" | null;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          trigger_type?: string;
+          trigger_data?: Json;
+          message?: string;
+          tone_used?: string | null;
+          shown_at?: string | null;
+          reaction?: "like" | "dislike" | "dismissed" | null;
+          created_at?: string | null;
+        };
+        Relationships: [];
+      };
+      coach_preferences: {
+        Row: {
+          user_id: string;
+          trigger_type: string;
+          enabled: boolean | null;
+          preferred_tone: string | null;
+          satisfaction_score: number | null;
+          last_shown_at: string | null;
+        };
+        Insert: {
+          user_id: string;
+          trigger_type: string;
+          enabled?: boolean | null;
+          preferred_tone?: string | null;
+          satisfaction_score?: number | null;
+          last_shown_at?: string | null;
+        };
+        Update: {
+          user_id?: string;
+          trigger_type?: string;
+          enabled?: boolean | null;
+          preferred_tone?: string | null;
+          satisfaction_score?: number | null;
+          last_shown_at?: string | null;
+        };
+        Relationships: [];
+      };
+      daily_focus: {
+        Row: {
+          user_id: string;
+          focus_date: string;
+          priority_1: string | null;
+          priority_2: string | null;
+          priority_3: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          user_id: string;
+          focus_date?: string;
+          priority_1?: string | null;
+          priority_2?: string | null;
+          priority_3?: string | null;
+          created_at?: string | null;
+        };
+        Update: {
+          user_id?: string;
+          focus_date?: string;
+          priority_1?: string | null;
+          priority_2?: string | null;
+          priority_3?: string | null;
+          created_at?: string | null;
+        };
+        Relationships: [];
+      };
+      journal_entries: {
+        Row: {
+          id: string;
+          user_id: string;
+          entry_date: string;
+          content: string;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          entry_date?: string;
+          content: string;
+          created_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          entry_date?: string;
+          content?: string;
+          created_at?: string | null;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

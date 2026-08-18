@@ -17,6 +17,9 @@ import TrendChart from "./TrendChart";
 import StatTile from "./StatTile";
 import HabitStreakCard from "./HabitStreakCard";
 import UnifiedTrendChart from "./UnifiedTrendChart";
+import CoachCard from "./CoachCard";
+import DailyFocusForm from "./DailyFocusForm";
+import JournalForm from "./JournalForm";
 import { apiFetch } from "@/lib/api-client";
 
 interface DashboardData {
@@ -137,6 +140,26 @@ export default function DashboardClient() {
             {target ? ` · ${target.modeLabel} · ${profile.dietaryRegimeLabel}` : ""}
           </p>
         </header>
+
+        {/* Coach comportamentale */}
+        <section style={cardStyle}>
+          <h2 style={sectionTitleStyle}>Il tuo coach oggi</h2>
+          <CoachCard />
+          <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: spacing.md, marginTop: spacing.md }}>
+            <div>
+              <p style={{ fontSize: font.size.xs, color: colors.textMuted, marginBottom: spacing.xs }}>
+                Priorità di oggi
+              </p>
+              <DailyFocusForm />
+            </div>
+            <div>
+              <p style={{ fontSize: font.size.xs, color: colors.textMuted, marginBottom: spacing.xs }}>
+                Note del giorno
+              </p>
+              <JournalForm />
+            </div>
+          </div>
+        </section>
 
         {/* Peso */}
         <section style={cardStyle}>

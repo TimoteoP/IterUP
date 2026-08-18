@@ -27,6 +27,7 @@ import type { Tables, TablesInsert } from "@/lib/types";
 import { supabaseServer } from "@/lib/supabase/server";
 import { enrichGoalsWithProgress } from "@/lib/goal-progress";
 import { requireApiAuth } from "@/lib/api-auth";
+import { evaluateGoalDelayed } from "@/lib/coach-evaluators";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +62,21 @@ export async function GET(request: NextRequest) {
 
   const goals = await enrichGoalsWithProgress((data ?? []) as Tables<"goals">[]);
 
-  return NextResponse.json({ goals });
+  // Coach comportamentale: "valutazione periodica su goals" (vedi
+  // PRD-addendum-coach-comportamentale.md sezione 3) — questo GET è
+  // il punto periodico naturale, dato che la pagina Obiettivi lo
+  // richiama ad ogni apertura. Best-effort, mai bloccante.
+  let coachNudge = null;
+  try {
+    for (const goal of goals) {
+      coachNudge = await evaluateGoalDelayed(goal, goal.progress_pct);
+      if (coachNudge) break;
+    }
+  } catch {
+    coachNudge = null;
+  }
+
+  return NextResponse.json({ goals, ...(coachNudge ? { coachNudge } : {}) });
 }
 
 export async function POST(request: NextRequest) {

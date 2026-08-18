@@ -21,6 +21,7 @@ import { CURRENT_USER_ID } from "@/lib/config";
 import type { TablesInsert, Tables } from "@/lib/types";
 import { isMealType, MEAL_TYPES_WITHOUT_FOOD, type MealType } from "@/lib/nutrition-options";
 import { requireApiAuth } from "@/lib/api-auth";
+import { evaluateAfterLogWrite } from "@/lib/coach-evaluators";
 
 export const dynamic = "force-dynamic";
 
@@ -173,5 +174,12 @@ export async function POST(request: NextRequest) {
     warning = `Calorie insolitamente alte per un singolo log (${Math.round(data.kcal)} kcal): controlla la quantità inserita.`;
   }
 
-  return NextResponse.json({ log: data, ...(warning ? { warning } : {}) }, { status: 201 });
+  // Coach comportamentale: best-effort, non deve mai far fallire il
+  // salvataggio del log (vedi PRD-addendum-coach-comportamentale.md).
+  const coachNudge = await evaluateAfterLogWrite(data).catch(() => null);
+
+  return NextResponse.json(
+    { log: data, ...(warning ? { warning } : {}), ...(coachNudge ? { coachNudge } : {}) },
+    { status: 201 }
+  );
 }

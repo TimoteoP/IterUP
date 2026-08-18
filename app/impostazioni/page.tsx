@@ -18,6 +18,7 @@ import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import ProfileForm, { PROFILE_FORM_INITIAL_STATE, type ProfileFormState } from "./ProfileForm";
 import SupplementsManager from "./SupplementsManager";
 import SupplementChat from "./SupplementChat";
+import CoachPreferences from "./CoachPreferences";
 import { apiFetch } from "@/lib/api-client";
 
 const cardStyle: React.CSSProperties = {
@@ -183,6 +184,22 @@ export default function ImpostazioniPage() {
             Chat integratori
           </h2>
           <SupplementChat />
+        </section>
+
+        <section style={cardStyle}>
+          <h2
+            style={{
+              fontSize: font.size.md,
+              fontWeight: font.weight.semibold,
+              marginBottom: spacing.md,
+            }}
+          >
+            Coach comportamentale
+          </h2>
+          <p style={{ color: colors.textSecondary, fontSize: font.size.sm, marginBottom: spacing.md }}>
+            Attiva o disattiva i singoli tipi di messaggi che il coach genera in base ai tuoi dati.
+          </p>
+          <CoachPreferences />
         </section>
 
         <section style={cardStyle}>

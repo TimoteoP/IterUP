@@ -14,6 +14,7 @@ import { CURRENT_USER_ID } from "@/lib/config";
 import { upsertBodyMetricsForDate } from "@/lib/body-metrics-store";
 import { validateBodyMetricsPayload, type BodyMetricsPayload } from "./validation";
 import { requireApiAuth } from "@/lib/api-auth";
+import { evaluateAfterBodyMetricsWrite } from "@/lib/coach-evaluators";
 
 // Evita che Next metta in cache le risposte fetch di supabase-js: lo
 // storico deve riflettere sempre l'ultimo stato dopo un upsert/delete.
@@ -71,5 +72,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ data }, { status: 200 });
+  const coachNudge = await evaluateAfterBodyMetricsWrite().catch(() => null);
+
+  return NextResponse.json({ data, ...(coachNudge ? { coachNudge } : {}) }, { status: 200 });
 }

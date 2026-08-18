@@ -13,6 +13,7 @@ import { CURRENT_USER_ID } from "@/lib/config";
 import type { Tables } from "@/lib/types";
 import { supabaseServer } from "@/lib/supabase/server";
 import { requireApiAuth } from "@/lib/api-auth";
+import { evaluateAfterHabitLogWrite } from "@/lib/coach-evaluators";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +60,7 @@ export async function POST(request: NextRequest) {
   // Verifica che l'abitudine appartenga all'utente corrente e
   // recupera type/target_value per derivare 'completed' se sensato.
   const { data: habitData, error: habitError } = await supabaseServer.from("habits")
-    .select("id, type, target_value")
+    .select("id, name, type, target_value")
     .eq("id", body.habit_id)
     .eq("user_id", CURRENT_USER_ID)
     .single();
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Abitudine non trovata." }, { status: 404 });
   }
 
-  const habit = habitData as Pick<Tables<"habits">, "id" | "type" | "target_value">;
+  const habit = habitData as Pick<Tables<"habits">, "id" | "name" | "type" | "target_value">;
 
   let completed: boolean | null = null;
   let value: number | null = null;
@@ -106,5 +107,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ log: data as Tables<"habit_logs"> });
+  const savedLog = data as Tables<"habit_logs">;
+  const coachNudge = await evaluateAfterHabitLogWrite(habit.id, habit.name, savedLog.completed, savedLog.recorded_at).catch(
+    () => null
+  );
+
+  return NextResponse.json({ log: savedLog, ...(coachNudge ? { coachNudge } : {}) });
 }

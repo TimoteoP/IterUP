@@ -285,6 +285,58 @@ create table if not exists public.supplement_chat_messages (
 
 create index if not exists idx_supplement_chat_user_date on public.supplement_chat_messages(user_id, created_at);
 
+-- ------------------------------------------------------------
+-- 14. COACH COMPORTAMENTALE
+-- ------------------------------------------------------------
+-- Vedi PRD-addendum-coach-comportamentale.md. coach_nudges = ogni
+-- messaggio generato (trigger + reazione); coach_preferences =
+-- switch on/off e tono preferito per trigger_type; daily_focus = le
+-- 3 priorità del rituale mattutino; journal_entries = "Note del
+-- giorno" lette dal rituale serale (nome tabella distinto dal
+-- diario alimentare per evitare confusione).
+create table if not exists public.coach_nudges (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  trigger_type text not null,
+  trigger_data jsonb not null default '{}',
+  message text not null,
+  tone_used text,
+  shown_at timestamptz default now(),
+  reaction text check (reaction in ('like', 'dislike', 'dismissed')),
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_coach_nudges_user_type on public.coach_nudges(user_id, trigger_type, created_at);
+
+create table if not exists public.coach_preferences (
+  user_id uuid references auth.users(id) on delete cascade not null,
+  trigger_type text not null,
+  enabled boolean default true,
+  preferred_tone text,
+  satisfaction_score numeric,
+  last_shown_at timestamptz,
+  primary key (user_id, trigger_type)
+);
+
+create table if not exists public.daily_focus (
+  user_id uuid references auth.users(id) on delete cascade not null,
+  focus_date date not null default current_date,
+  priority_1 text,
+  priority_2 text,
+  priority_3 text,
+  created_at timestamptz default now(),
+  primary key (user_id, focus_date)
+);
+
+create table if not exists public.journal_entries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  entry_date date not null default current_date,
+  content text not null,
+  created_at timestamptz default now(),
+  unique (user_id, entry_date)
+);
+
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- ------------------------------------------------------------
@@ -304,6 +356,10 @@ alter table public.foods enable row level security;
 alter table public.supplements enable row level security;
 alter table public.meal_suggestion_feedback enable row level security;
 alter table public.supplement_chat_messages enable row level security;
+alter table public.coach_nudges enable row level security;
+alter table public.coach_preferences enable row level security;
+alter table public.daily_focus enable row level security;
+alter table public.journal_entries enable row level security;
 
 create policy "foods_read_all" on public.foods for select using (true);
 create policy "foods_insert_all" on public.foods for insert with check (true);
@@ -318,6 +374,10 @@ create policy "goals_own" on public.goals for all using (auth.uid() = user_id);
 create policy "supplements_own" on public.supplements for all using (auth.uid() = user_id);
 create policy "meal_suggestion_feedback_own" on public.meal_suggestion_feedback for all using (auth.uid() = user_id);
 create policy "supplement_chat_messages_own" on public.supplement_chat_messages for all using (auth.uid() = user_id);
+create policy "coach_nudges_own" on public.coach_nudges for all using (auth.uid() = user_id);
+create policy "coach_preferences_own" on public.coach_preferences for all using (auth.uid() = user_id);
+create policy "daily_focus_own" on public.daily_focus for all using (auth.uid() = user_id);
+create policy "journal_entries_own" on public.journal_entries for all using (auth.uid() = user_id);
 
 -- ------------------------------------------------------------
 -- Setup una tantum: crea l'unico utente fisso dell'app
