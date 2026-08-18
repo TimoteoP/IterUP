@@ -7,6 +7,13 @@ import MealSuggestions from "./components/MealSuggestions";
 import AddFoodForm from "./components/AddFoodForm";
 import { MEAL_TYPES_WITHOUT_FOOD } from "@/lib/nutrition-options";
 import {
+  generateClientId,
+  enqueueLog,
+  flushQueue,
+  getQueuedLogs,
+  type QueuedLogPayload,
+} from "@/lib/offline-queue";
+import {
   MEAL_TYPES,
   MEAL_LABELS,
   type MealType,
@@ -74,6 +81,14 @@ export default function DiarioPage() {
   const [logWarning, setLogWarning] = useState<string | null>(null);
   const [showAddFood, setShowAddFood] = useState(false);
 
+  // Coda offline (vedi PRD-addendum-hardening-completamento.md A4): un
+  // log che fallisce per assenza di rete appare comunque subito in UI
+  // (salvataggio ottimistico) con un badge "in sincronizzazione",
+  // finché non viene confermato dal server.
+  const [pendingLogs, setPendingLogs] = useState<
+    { clientId: string; food_name: string; meal_type: MealType; quantity_g: number; kcal: number }[]
+  >([]);
+
   const refresh = useCallback(async () => {
     setLoadingLogs(true);
     setLoadError(null);
@@ -98,6 +113,60 @@ export default function DiarioPage() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // Reinvio della coda offline: la Background Sync API non è
+  // affidabile su iOS Safari (vedi lib/offline-queue.ts), quindi il
+  // meccanismo primario è un retry lato client agli eventi
+  // online/focus, non il solo service worker.
+  const flushPending = useCallback(async () => {
+    const before = await getQueuedLogs();
+    if (before.length === 0) return;
+    const synced = await flushQueue();
+    if (synced > 0) {
+      const after = await getQueuedLogs();
+      const stillQueued = new Set(after.map((i) => i.clientId));
+      setPendingLogs((prev) => prev.filter((p) => stillQueued.has(p.clientId)));
+      await refresh();
+    }
+  }, [refresh]);
+
+  useEffect(() => {
+    // Alla prima apertura, eventuali log rimasti in coda da una
+    // sessione precedente (es. tab chiusa mentre offline) vanno sia
+    // mostrati come pending sia ritentati subito.
+    getQueuedLogs().then((items) => {
+      if (items.length === 0) return;
+      setPendingLogs((prev) => [
+        ...prev,
+        ...items
+          .filter((i) => !prev.some((p) => p.clientId === i.clientId))
+          .map((i) => ({
+            clientId: i.clientId,
+            food_name: "…",
+            meal_type: i.payload.meal_type as MealType,
+            quantity_g: i.payload.quantity_g,
+            kcal: 0,
+          })),
+      ]);
+      flushPending();
+    });
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") flushPending();
+    };
+    const onServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data?.type === "iterup-flush-logs") flushPending();
+    };
+    window.addEventListener("online", flushPending);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    navigator.serviceWorker?.addEventListener("message", onServiceWorkerMessage);
+    return () => {
+      window.removeEventListener("online", flushPending);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      navigator.serviceWorker?.removeEventListener("message", onServiceWorkerMessage);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Ricerca alimenti con debounce: evita una richiesta ad ogni tasto.
   useEffect(() => {
@@ -155,30 +224,76 @@ export default function DiarioPage() {
     setAdding(true);
     setAddError(null);
     setLogWarning(null);
+
+    const clientId = generateClientId();
+    const payload: QueuedLogPayload = {
+      food_id: selectedFood.id,
+      quantity_g: quantityNumber,
+      meal_type: mealType,
+      logged_at: date,
+    };
+
+    // Salvataggio ottimistico (vedi lib/offline-queue.ts A4): il log
+    // appare subito in UI, anche senza rete. Confermato/rimosso dopo
+    // la risposta del server, o al successivo reinvio della coda.
+    setPendingLogs((prev) => [
+      ...prev,
+      {
+        clientId,
+        food_name: selectedFood.name,
+        meal_type: mealType,
+        quantity_g: quantityNumber,
+        kcal: (selectedFood.kcal_100g * quantityNumber) / 100,
+      },
+    ]);
+    clearSelection();
+
+    let networkError = false;
     try {
       const res = await fetch("/api/logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          food_id: selectedFood.id,
-          quantity_g: quantityNumber,
-          meal_type: mealType,
-          logged_at: date,
-        }),
+        body: JSON.stringify(payload),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Errore nel salvataggio");
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        // Errore applicativo (validazione, alimento non trovato...):
+        // non è un problema di rete, non ha senso rimetterlo in coda.
+        setPendingLogs((prev) => prev.filter((p) => p.clientId !== clientId));
+        setAddError(json.error ?? "Errore nel salvataggio");
+        setAdding(false);
+        return;
+      }
       // Guardrail soft: il log è comunque salvato, ma un valore
       // insolito (es. 1000g invece di 100g digitati per errore) viene
       // segnalato senza bloccare il salvataggio.
       if (json.warning) setLogWarning(json.warning);
-      clearSelection();
+      setPendingLogs((prev) => prev.filter((p) => p.clientId !== clientId));
       await refresh();
-    } catch (err) {
-      setAddError(err instanceof Error ? err.message : "Errore sconosciuto");
-    } finally {
-      setAdding(false);
+    } catch {
+      // fetch stesso ha fallito (rete assente/instabile): il log
+      // resta visibile come "in sincronizzazione" e viene accodato.
+      networkError = true;
     }
+
+    if (networkError) {
+      await enqueueLog(clientId, payload);
+      // Se il browser supporta Background Sync (non iOS Safari, vedi
+      // lib/offline-queue.ts), registra un tentativo di reinvio anche
+      // se l'utente chiude la pagina prima del ritorno online.
+      try {
+        if ("serviceWorker" in navigator) {
+          const reg = await navigator.serviceWorker.ready;
+          await (reg as ServiceWorkerRegistration & { sync?: { register: (tag: string) => Promise<void> } }).sync?.register(
+            "iterup-flush-logs"
+          );
+        }
+      } catch {
+        // Background Sync non disponibile: nessun problema, il retry
+        // su online/focus resta il meccanismo primario.
+      }
+    }
+    setAdding(false);
   }
 
   async function handleDelete(id: string) {
@@ -602,6 +717,29 @@ export default function DiarioPage() {
               >
                 ×
               </button>
+            </div>
+          )}
+          {pendingLogs.length > 0 && (
+            <div style={cardStyle}>
+              <p style={{ fontSize: font.size.xs, color: colors.textMuted, marginBottom: spacing.xs }}>
+                In sincronizzazione…
+              </p>
+              <ul className="flex flex-col" style={{ gap: spacing.xs }}>
+                {pendingLogs.map((p) => (
+                  <li
+                    key={p.clientId}
+                    className="flex items-center justify-between"
+                    style={{ padding: `${spacing.xs} 0`, opacity: 0.6 }}
+                  >
+                    <span style={{ fontSize: font.size.sm }}>
+                      {p.food_name} · {MEAL_LABELS[p.meal_type]}
+                    </span>
+                    <span style={{ fontSize: font.size.xs, color: colors.textMuted }}>
+                      {p.quantity_g}g · ⏳
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           {MEAL_TYPES.map((mt) => {

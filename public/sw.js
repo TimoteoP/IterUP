@@ -41,6 +41,22 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Coda offline diario (vedi PRD-addendum-hardening-completamento.md A4
+// e lib/offline-queue.ts): la Background Sync API ha supporto
+// limitato/assente su iOS Safari, quindi il meccanismo primario di
+// reinvio è lato pagina (evento online/focus). Qui gestiamo solo il
+// caso in cui il browser la supporta e la pagina non è già in
+// primo piano: svegliamo i client aperti per far ripartire il flush,
+// senza duplicare l'accesso a IndexedDB nel service worker.
+self.addEventListener("sync", (event) => {
+  if (event.tag !== "iterup-flush-logs") return;
+  event.waitUntil(
+    self.clients.matchAll({ type: "window" }).then((clients) => {
+      clients.forEach((client) => client.postMessage({ type: "iterup-flush-logs" }));
+    })
+  );
+});
+
 // Cache-first per asset statici same-origin (GET). Tutto il resto (API,
 // POST, richieste cross-origin come Supabase) passa direttamente alla rete.
 self.addEventListener("fetch", (event) => {
