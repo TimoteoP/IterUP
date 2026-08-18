@@ -16,6 +16,7 @@ import MacroProgressBar from "../diario/MacroProgressBar";
 import TrendChart from "./TrendChart";
 import StatTile from "./StatTile";
 import HabitStreakCard from "./HabitStreakCard";
+import UnifiedTrendChart from "./UnifiedTrendChart";
 
 interface DashboardData {
   profile: { fullName: string | null; dietaryRegimeLabel: string };
@@ -361,6 +362,12 @@ export default function DashboardClient() {
               </Link>
             </div>
           )}
+        </section>
+
+        {/* Vista cronologica integrata: peso + kcal + attività + abitudini */}
+        <section style={cardStyle}>
+          <h2 style={sectionTitleStyle}>Cronologia</h2>
+          <UnifiedTrendChart />
         </section>
       </div>
     </main>
