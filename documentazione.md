@@ -41,6 +41,39 @@ IterUp **non ha autenticazione**. È un'app a singolo utente:
 Se in futuro serve un vero sistema multi-utente, è un cambio isolato a
 `lib/config.ts`/`lib/supabase/server.ts`, non tocca i moduli funzionali.
 
+### 1.2.1 Protezione delle API route (token condiviso)
+
+"Niente login" non significava "nessun controllo": fino a un certo punto del progetto,
+**ogni** API route era raggiungibile da chiunque conoscesse l'URL dell'app deployata,
+perché ogni route usa la service role key server-side a prescindere da chi ha fatto la
+richiesta. Le Row Level Security policy in `schema.sql` **non aiutano qui**: sono legate
+al ruolo Postgres della connessione, e la service role bypassa le RLS per design — quindi
+sono difesa in profondità solo per lo scenario (oggi non presente) in cui un client
+browser usasse la anon key direttamente contro Supabase, non per il traffico reale
+dell'app, che passa sempre dalle API route.
+
+La protezione reale è `lib/api-auth.ts`: ogni API route (lettura e scrittura) chiama
+`requireApiAuth(request)` e risponde `401` senza un token valido, letto da header
+`x-api-token` o query param `?token=`. Il client (l'app stessa) allega il token
+automaticamente tramite `lib/api-client.ts` (`apiFetch`, da usare al posto di `fetch()`
+nudo per ogni chiamata verso `/api/**`). Il token vive in due variabili d'ambiente con lo
+stesso valore — `API_WRITE_SECRET` (letta solo server-side) e
+`NEXT_PUBLIC_API_WRITE_TOKEN` (nel bundle client, perché il client deve poterlo allegare)
+— quindi non è un segreto crittografico forte (visibile a chi ispetta la scheda Network),
+ma alza l'asticella da "chiunque conosca l'URL" a "chiunque ispezioni il traffico", nello
+stesso spirito del webhook `ACTIVITY_WEBHOOK_SECRET` già esistente per gli Shortcuts iOS.
+
+Due eccezioni deliberate, senza token:
+
+- `POST /api/activity/ingest` — protetta da un secret **diverso** (`ACTIVITY_WEBHOOK_SECRET`),
+  perché è chiamata da uno Shortcut iOS esterno, non dal client dell'app.
+- `GET /api/reminders/status` — nessun token: pensata per essere interrogata da uno
+  Shortcut iOS pianificato, e il payload non contiene mai dati personali (solo booleani
+  "manca X oggi?").
+
+Protezione reale aggiuntiva prevista ma non ancora attiva: **Vercel Deployment
+Protection**, una volta fatto il deploy.
+
 ## 1.3 Struttura del repository
 
 ```
@@ -55,7 +88,7 @@ app/
   abitudini/                  CRUD abitudini + log giornaliero
   obiettivi/                  CRUD obiettivi generalizzati
   attivita/                   Attività fisica (passi + allenamenti)
-  impostazioni/                Profilo utente (anche primo avvio) + integratori
+  impostazioni/                Profilo (anche primo avvio) + integratori/chat + backup + preferenze coach
   api/                        Tutte le API route server-side (vedi 1.5)
 components/
   nav/                        Navigazione (bottom nav mobile / sidebar desktop)
@@ -81,25 +114,44 @@ CLAUDE.md                     Regole operative per lavorare sul progetto con Cla
 | `composition.ts` | Formule della Bussola di Ricomposizione (BF% Navy, FM/FFM, bilancio energetico, Indice di Ricomposizione, logica di direzione) |
 | `body-metrics-store.ts` | Upsert "merge-aware" su `body_metrics`, condivisa tra modulo Misure e Bussola |
 | `openrouter.ts` | Client OpenRouter condiviso (fallback esplicito tra modelli, mai auto-router) |
+| `api-auth.ts` | `requireApiAuth(request)` — guardia token per ogni API route, vedi 1.2.1 |
+| `api-client.ts` | `apiFetch()` — wrapper client che allega il token, da usare al posto di `fetch()` nudo |
+| `streak.ts` | Calcolo streak (giorni consecutivi completati), condiviso tra dashboard e obiettivi |
+| `goal-progress.ts` | `current_value`/`progress_pct` degli obiettivi, calcolati a runtime dai dati reali, mai persistiti |
+| `offline-queue.ts` | Coda IndexedDB per i log del diario quando manca rete (retry automatico al ritorno online) |
+| `coach-triggers.ts` | Coach comportamentale: rilevamento pattern, funzioni pure e testate (vedi 1.11) |
+| `coach-messages.ts` | Coach comportamentale: prompt e chiamate OpenRouter per nudge/rituali mattina-sera |
+| `coach-engine.ts` | Coach comportamentale: switch on/off, cap di frequenza, ciclo di feedback 👍/👎 |
+| `coach-evaluators.ts` | Coach comportamentale: legge i dati reali e collega trigger + engine ai punti di scrittura |
 
 I file marcati "contratto congelato" non vanno modificati senza motivo esplicito: sono la
 superficie di contatto tra i moduli (vedi `CLAUDE.md`).
 
 ## 1.5 API route (convenzione: `app/api/<modulo>/<azione>/route.ts`)
 
+Tutte le route sotto `/api/**` richiedono il token condiviso (vedi 1.2.1), tranne le due
+eccezioni deliberate segnalate lì.
+
 | Modulo | Route | Note |
 |---|---|---|
 | Profilo | `GET/POST /api/profile` | Legge/salva profilo, ricalcola TDEE e target ad ogni salvataggio |
-| Diario | `GET /api/foods/search`, `POST /api/foods` | Ricerca full-text italiana + creazione manuale alimenti |
-| Diario | `GET/POST /api/logs`, `DELETE /api/logs/[id]`, `GET /api/logs/summary` | CRUD log pasti, riepilogo macro giornaliero |
+| Diario | `GET /api/foods/search`, `POST /api/foods`, `GET /api/foods/search-external` | Ricerca full-text → ilike → trigram (typo-tolerante); import da Open Food Facts su richiesta esplicita |
+| Diario | `GET/POST /api/logs`, `DELETE /api/logs/[id]`, `GET /api/logs/summary` | CRUD log pasti, riepilogo macro giornaliero, guardrail soft su quantità/kcal anomale |
 | Generatore AI | `POST /api/suggest-meal`, `POST /api/suggest-meal/feedback` | 5 proposte pasto via OpenRouter, voto 👍/👎 |
 | Misure | `GET/POST /api/body-metrics`, `DELETE /api/body-metrics/[id]` | Storico peso/circonferenze |
 | Bussola | `GET /api/composition`, `POST /api/composition/checkin` | Calcolo direzione + salvataggio check-in |
-| Abitudini | `GET/POST /api/habits`, `PATCH/DELETE /api/habits/[id]`, `POST /api/habits/log` | CRUD + log giornaliero |
-| Obiettivi | `GET/POST /api/goals`, `PATCH/DELETE /api/goals/[id]` | CRUD generalizzato |
-| Attività | `POST /api/activity/ingest`, `POST /api/activity/create`, `GET /api/activity/list`, `DELETE /api/activity/delete` | Webhook Shortcuts + form manuale |
+| Abitudini | `GET/POST /api/habits`, `PATCH/DELETE /api/habits/[id]`, `GET/POST /api/habits/log` | CRUD + log giornaliero |
+| Obiettivi | `GET/POST /api/goals`, `PATCH/DELETE /api/goals/[id]` | CRUD, `current_value`/`progress_pct` calcolati a runtime, valuta anche il trigger "obiettivo in ritardo" del coach |
+| Attività | `POST /api/activity/ingest`, `POST /api/activity/create`, `GET /api/activity/list`, `DELETE /api/activity/delete` | Webhook Shortcuts (secret dedicato) + form manuale |
 | Integratori | `GET/POST /api/supplements`, `PATCH/DELETE /api/supplements/[id]` | CRUD |
-| Dashboard | `GET /api/dashboard` | Aggrega tutti gli indicatori della home |
+| Integratori | `GET/POST /api/supplements/chat` | Chat Q&A con web search grounding obbligatorio, citazioni cliccabili |
+| Dashboard | `GET /api/dashboard`, `GET /api/dashboard/timeline` | Aggrega gli indicatori della home + vista cronologica (peso/kcal/attività/abitudini) |
+| Backup | `GET /api/export` | Esporta in JSON tutti i dati dell'utente (profilo, diario, misure, attività, abitudini, obiettivi, integratori) |
+| Promemoria | `GET /api/reminders/status` | Booleani "manca X oggi?", per uno Shortcut iOS pianificato — nessun dato personale, nessun token |
+| Coach | `GET /api/coach/nudges`, `POST /api/coach/nudges/[id]/feedback` | Ultimi nudge generati + reazione 👍/👎/silenzia |
+| Coach | `GET/PATCH /api/coach/preferences` | Switch on/off e tono preferito per categoria di trigger |
+| Coach | `GET/POST /api/coach/daily-focus`, `GET/POST /api/coach/journal` | Le 3 priorità del giorno, "Note del giorno" |
+| Coach | `GET /api/coach/morning`, `GET /api/coach/evening` | Rituali per Shortcut iOS pianificato (mattina/sera) |
 
 ## 1.6 Schema database
 
@@ -118,6 +170,11 @@ che è applicato sul DB live in questo istante: vedi 1.7). Tabelle:
 | `goals` | Obiettivi generalizzati (peso, streak abitudine, attività, custom) |
 | `supplements` | Integratori posseduti |
 | `meal_suggestion_feedback` | Voti sulle proposte pasto AI |
+| `supplement_chat_messages` | Cronologia della chat Q&A sugli integratori, con citazioni web |
+| `coach_nudges` | Ogni messaggio generato dal coach comportamentale (trigger, dati grezzi, reazione) |
+| `coach_preferences` | Switch on/off, tono preferito e tasso di gradimento per categoria di trigger |
+| `daily_focus` | Le 3 priorità della giornata (rituale mattutino del coach) |
+| `journal_entries` | "Note del giorno" — testo libero letto (non interpretato) dal rituale serale del coach |
 
 Dettagli importanti che si discostano da un modello "naive":
 
@@ -133,6 +190,9 @@ Dettagli importanti che si discostano da un modello "naive":
   `sex_at_checkin` — snapshot del sesso al momento del check-in). L'upsert è
   **merge-aware** (`lib/body-metrics-store.ts`): un form non cancella i campi scritti
   dall'altro per lo stesso giorno.
+- **Ricerca alimenti a 3 livelli**: full-text → `ilike` → estensione `pg_trgm` (tolleranza
+  ai typo) via una funzione RPC dedicata (`search_foods_trgm`, PostgREST non permette di
+  ordinare per `similarity()` direttamente dal query builder).
 
 ## 1.7 Migrazioni: come sincronizzare lo schema
 
@@ -142,9 +202,19 @@ file `schema-migration-NNN-<nome>.sql` separato, da eseguire **manualmente** nel
 Editor di Supabase (nessun accesso diretto del supervisore al DB per operazioni DDL: la
 service role key permette solo query REST, non DDL).
 
-Ordine di applicazione, se si parte da zero: `schema.sql`, poi `schema-migration-002-*`,
-`003`, `004`, `005` in ordine numerico. Ogni file ha in testa un commento che descrive
-cosa cambia.
+Ordine di applicazione, se si parte da zero: `schema.sql`, poi `schema-migration-002-*`
+fino a `008-*` in ordine numerico. Ogni file ha in testa un commento che descrive cosa
+cambia. Riepilogo di cosa introduce ciascuna migrazione:
+
+| Migrazione | Introduce |
+|---|---|
+| `002-addendum` | Campi onboarding (regime, allergie, preferenze), digiuno/integrazione |
+| `003` | Split macro per regime alimentare |
+| `004-bussola` | Bussola di Ricomposizione: fianchi, kcal periodo, percezioni collo/polso |
+| `005-polso` | Campo `wrist_cm` (contesto, fuori dal calcolo BF%/IR) |
+| `006-trgm` | Estensione `pg_trgm` + funzione `search_foods_trgm` |
+| `007-supplement-chat` | Tabella `supplement_chat_messages` |
+| `008-coach` | Tabelle `coach_nudges`, `coach_preferences`, `daily_focus`, `journal_entries` |
 
 ## 1.8 Documenti di riferimento
 
@@ -153,6 +223,10 @@ cosa cambia.
 - `PRD-addendum-onboarding-form.md` — regime/allergie/preferenze, digiuno/integrazione, integratori
 - `PRD-addendum-openrouter.md` — vincoli sul motore AI (modelli, fallback, schema JSON)
 - `PRD-addendum-bussola-ricomposizione.md` — Bussola di Ricomposizione Corporea
+- `PRD-addendum-hardening-completamento.md` — test, guardrail, coda offline, ricerca
+  tollerante ai typo, obiettivi collegati ai dati, export, vista cronologica, chat
+  integratori, promemoria
+- `PRD-addendum-coach-comportamentale.md` — motore di nudge, rituali mattina/sera
 
 ## 1.9 Variabili d'ambiente (`.env.local`, mai committato)
 
@@ -162,8 +236,10 @@ cosa cambia.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Chiave anon (non usata lato server, presente per eventuali usi client futuri) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Chiave service-role, solo server-side |
 | `CURRENT_USER_ID` | UUID dell'unico utente dell'app |
-| `ACTIVITY_WEBHOOK_SECRET` | Shared secret per il webhook Shortcuts iOS |
-| `OPENROUTER_API_KEY` | Chiave OpenRouter per il generatore pasti AI |
+| `ACTIVITY_WEBHOOK_SECRET` | Shared secret per il webhook Shortcuts iOS (`/api/activity/ingest`) |
+| `OPENROUTER_API_KEY` | Chiave OpenRouter per generatore pasti, chat integratori, coach |
+| `API_WRITE_SECRET` | Token di protezione delle API route, letto solo server-side (vedi 1.2.1) |
+| `NEXT_PUBLIC_API_WRITE_TOKEN` | Stesso valore di `API_WRITE_SECRET`, nel bundle client perché il client deve allegarlo |
 
 ## 1.10 Sviluppo locale
 
@@ -173,7 +249,46 @@ npm run dev       # sviluppo, http://localhost:3000
 npm run build     # build di produzione — deve sempre passare prima di considerare
                    # una modifica completa (vedi CLAUDE.md)
 npm run start     # avvia la build di produzione in locale
+npm test          # esegue la suite Vitest (funzioni pure: tdee, composition,
+                   # body-indices, nutrition-options, streak, coach-triggers)
 ```
+
+## 1.11 Coach Comportamentale
+
+Motore di **nudge comportamentali**, non un sistema che "impara la psicologia"
+dell'utente in senso forte: con i dati di un solo utente non c'è segnale sufficiente per
+un modello che apprende pattern individuali complessi. È deliberatamente composto da
+regole esplicite + un layer LLM che scrive il messaggio nel tono giusto + un ciclo di
+feedback semplice (non machine learning), vedi `PRD-addendum-coach-comportamentale.md`.
+
+**Motore di trigger** (`lib/coach-triggers.ts`, funzioni pure e testate) — 6 pattern:
+peso stabile/sceso poco, pattern orario di fame ricorrente, abitudine saltata (solo al
+primo salto), obiettivo in ritardo sul ritmo necessario, pasto molto sopra target,
+streak a 7/30/90 giorni. Valutati inline subito dopo le scritture esistenti
+(`lib/coach-evaluators.ts` collega i dati reali ai trigger, chiamato da
+`POST /api/logs`, `POST /api/body-metrics`, `POST /api/habits/log`, `GET /api/goals`),
+mai come processo separato: nessuna infrastruttura nuova.
+
+**Guardrail**: switch on/off per categoria (`coach_preferences.enabled`), cap di
+frequenza per categoria (`lib/coach-engine.ts`, es. max 1 nudge "peso" a settimana anche
+loggando ogni giorno), nessun nudge "pasto sopra target" senza almeno 14 giorni di
+storico. Ogni chiamata è **best-effort**: un errore nel coach non fa mai fallire la
+scrittura principale (log, misurazione, ecc.).
+
+**Ciclo di feedback** (non ML): ogni nudge ha 👍/👎/silenzia. Il tasso di gradimento
+aggregato per categoria allunga automaticamente il cap di frequenza sotto il 50%, e
+disattiva la categoria sotto il 20% (con almeno 3 reazioni, per non disattivare da un
+singolo 👎 isolato). Il tono (diretto/pratico vs. riflessivo) si salva su quello con più
+👍 tra le varianti usate.
+
+**Rituali mattina/sera** (`GET /api/coach/morning`, `GET /api/coach/evening`), pensati
+per uno Shortcut iOS pianificato che legge la risposta via Siri o notifica locale — non
+c'è infrastruttura push nuova. Il mattino risponde sempre con 3 componenti (riflessione
+originale mai con citazioni a persone reali, le 3 priorità da `daily_focus` o dedotte da
+obiettivi/abitudini, un'abitudine da ricordare). La sera riassume la giornata e chiude
+con un tono calmo, mai una checklist di correzioni; se le "Note del giorno"
+(`journal_entries`) contengono segnali di disagio, il modello stesso resta più sobrio
+senza interpretarli — non c'è una fase di rilevamento separata nel codice.
 
 ---
 
@@ -212,16 +327,27 @@ La schermata principale riassume tutto lo stato attuale:
   considerarla "acquisita".
 - **Attività**: passi di oggi/settimana/mese, allenamenti della settimana.
 - **Obiettivi in corso**: con barra di avanzamento per quelli legati al peso.
+- **Il tuo coach oggi**: i messaggi che il coach comportamentale ti ha lasciato (vedi
+  2.9), più due form rapidi per le priorità della giornata e le note personali.
+- **Cronologia**: un'unica vista con peso, aderenza calorica, abitudini completate e
+  minuti di attività fianco a fianco sulla stessa scala temporale (7/30/90 giorni).
 
 ## 2.4 Diario alimentare
 
-Cerca un alimento (ricerca in italiano, oltre 180 alimenti già disponibili), scegli
-quantità e pasto (colazione/pranzo/cena/spuntino), e salvalo: le calorie e i macro
-vengono calcolati automaticamente. Non trovi un alimento? Puoi **aggiungerlo tu** al
-database con i suoi valori nutrizionali per 100g.
+Cerca un alimento (ricerca in italiano, oltre 180 alimenti già disponibili — la ricerca
+tollera anche piccoli errori di battitura). Non lo trovi? Puoi **aggiungerlo tu** al
+database con i suoi valori nutrizionali per 100g, oppure cercarlo nel database pubblico
+Open Food Facts e importarlo con un tap. Scegli quantità e pasto
+(colazione/pranzo/cena/spuntino) e salvalo: le calorie e i macro vengono calcolati
+automaticamente. Se inserisci per sbaglio un valore fuori scala (es. 1000g invece di
+100g), l'app te lo segnala senza bloccare comunque il salvataggio.
 
 Puoi anche registrare un **digiuno** con un tasto rapido, senza dover selezionare un
 alimento.
+
+Se salvi un log senza connessione, resta visibile come "in sincronizzazione" e viene
+inviato automaticamente non appena torni online: non perdi mai un log per assenza di
+rete.
 
 ### Suggerimenti pasto con AI
 
@@ -277,17 +403,45 @@ Attività. Se usi un iPhone, puoi anche automatizzare l'invio dei passi giornali
 uno **Shortcut** che chiama l'endpoint webhook dell'app (serve una chiave segreta,
 configurata una volta sola).
 
-## 2.9 Impostazioni
+## 2.9 Il tuo coach comportamentale
 
-Oltre a modificare il tuo profilo in qualsiasi momento, questa è anche la sezione dove
-gestisci l'elenco dei **integratori** che possiedi (nome, principio attivo/dosaggio,
-formato) — utile come base per future funzioni di consiglio automatico e per una chat
-dedicata alle domande sugli integratori (in arrivo).
+IterUp osserva i tuoi dati (peso, pasti, abitudini, obiettivi) e a volte ti lascia un
+breve messaggio — mai un giudizio su un singolo giorno, mai in tono colpevolizzante, e
+mai vuota retorica motivazionale senza un dato o un'azione concreta dentro. Ogni
+messaggio ha un 👍, un 👎 e un "silenzia questo tipo": se un certo tipo di messaggio non
+ti è utile, IterUp riduce da solo quanto spesso te lo mostra, e lo disattiva del tutto se
+continua a non piacerti.
 
-## 2.10 Cosa NON fa (per ora)
+Nella dashboard puoi anche:
+
+- scrivere le **3 priorità della giornata** (usate dal rituale del mattino, se lo
+  configuri — vedi sotto);
+- scrivere una **nota personale del giorno** ("Note del giorno"), diversa dal diario
+  alimentare — letta solo dal riepilogo serale, mai analizzata o commentata nel merito.
+
+Se usi un iPhone, puoi configurare due **Shortcut iOS pianificati** (uno al mattino, uno
+alla sera) che chiamano rispettivamente `/api/coach/morning` e `/api/coach/evening` e ti
+leggono via Siri o mostrano una notifica: una riflessione + le tue priorità + un
+promemoria su un'abitudine al mattino, un riepilogo calmo della giornata alla sera.
+Richiedono la stessa chiave segreta usata per proteggere le altre funzioni dell'app
+(configurata una volta sola nello Shortcut).
+
+## 2.10 Impostazioni
+
+Oltre a modificare il tuo profilo in qualsiasi momento, questa è anche la sezione dove:
+
+- gestisci l'elenco degli **integratori** che possiedi (nome, dosaggio, formato);
+- fai domande libere sui tuoi integratori a una **chat con ricerca web**, che etichetta
+  sempre ogni affermazione come evidenza scientifica o anedottica e cita le fonti che ha
+  trovato — non sostituisce un parere medico;
+- attivi o disattivi i singoli tipi di messaggio del **coach comportamentale**;
+- scarichi un **backup completo** di tutti i tuoi dati in un file JSON.
+
+## 2.11 Cosa NON fa (per ora)
 
 - Non genera automaticamente un piano dietetico per integratori (solo il diario pasti ha
   il generatore AI, per ora).
-- Non ha una chat AI per domande libere (es. sugli integratori) — prevista come sviluppo
-  futuro.
+- Non è uno strumento clinico: il coach comportamentale non interpreta, non etichetta e
+  non fa diagnosi su ciò che scrivi nelle note personali — se percepisce un tono più
+  serio si limita a essere più sobrio quella sera, nient'altro.
 - Non supporta più utenti: è pensata per un solo profilo.
