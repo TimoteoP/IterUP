@@ -12,6 +12,9 @@ import { CURRENT_USER_ID } from "@/lib/config";
 import { DIET_MODES, dietaryRegimeLabel } from "@/lib/nutrition-options";
 import { calculateTDEE, calculateAge, type ActivityLevel, type Sex } from "@/lib/tdee";
 import { calculateBMI, bmiCategory, calculateBodyIndex } from "@/lib/body-indices";
+import { calculateStreak } from "@/lib/streak";
+import { enrichGoalsWithProgress } from "@/lib/goal-progress";
+import type { Tables } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +119,7 @@ export async function GET() {
       .lte("recorded_at", today),
     supabaseServer
       .from("goals")
-      .select("id, title, goal_type, target_value, target_date, status, created_at")
+      .select("*")
       .eq("user_id", CURRENT_USER_ID)
       .eq("status", "in_corso")
       .order("created_at", { ascending: true })
@@ -187,22 +190,8 @@ export async function GET() {
 
   const habitStats = habits.map((h) => {
     const logs = logsByHabit.get(h.id) ?? new Map<string, boolean>();
-    const hasLogToday = logs.has(today);
     const completedToday = logs.get(today) === true;
-
-    let streak = 0;
-    if (hasLogToday && !completedToday) {
-      streak = 0;
-    } else {
-      const cursor = new Date(today + "T00:00:00Z");
-      if (!(hasLogToday && completedToday)) {
-        cursor.setUTCDate(cursor.getUTCDate() - 1);
-      }
-      while (logs.get(cursor.toISOString().slice(0, 10)) === true) {
-        streak++;
-        cursor.setUTCDate(cursor.getUTCDate() - 1);
-      }
-    }
+    const streak = calculateStreak(logs, today);
 
     return {
       id: h.id,
@@ -227,24 +216,18 @@ export async function GET() {
     .filter((r) => r.recorded_at >= weekStart)
     .reduce((s, r) => s + (r.workout_minutes ?? 0), 0);
 
-  // ---- Obiettivi in corso (con % di avanzamento solo per goal_type='weight', calcolabile dallo storico peso) ----
-  const baselineWeight = weightHistory[0]?.weight_kg ?? null;
-  const goals = (goalsResult.data ?? []).map((g) => {
-    let progressPct: number | null = null;
-    if (g.goal_type === "weight" && g.target_value !== null && baselineWeight !== null && currentWeight !== null) {
-      const total = baselineWeight - g.target_value;
-      const done = baselineWeight - currentWeight;
-      progressPct = total !== 0 ? Math.max(0, Math.min(100, Math.round((done / total) * 100))) : null;
-    }
-    return {
-      id: g.id,
-      title: g.title,
-      goalType: g.goal_type,
-      targetValue: g.target_value,
-      targetDate: g.target_date,
-      progressPct,
-    };
-  });
+  // ---- Obiettivi in corso: current_value/progress_pct calcolati dai
+  // dati reali per weight/activity/habit_streak (vedi lib/goal-progress.ts) ----
+  const enrichedGoals = await enrichGoalsWithProgress((goalsResult.data ?? []) as Tables<"goals">[]);
+  const goals = enrichedGoals.map((g) => ({
+    id: g.id,
+    title: g.title,
+    goalType: g.goal_type,
+    targetValue: g.target_value,
+    targetDate: g.target_date,
+    currentValue: g.current_value,
+    progressPct: g.progress_pct,
+  }));
 
   // ---- BMI ----
   const profile = profileResult.data;

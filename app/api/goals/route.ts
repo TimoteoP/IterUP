@@ -1,7 +1,22 @@
 // ============================================================
 // IterUp — API obiettivi (CRUD)
 // ------------------------------------------------------------
-// GET  /api/goals            -> lista obiettivi dell'utente
+// GET  /api/goals            -> lista obiettivi dell'utente, con
+//       current_value/progress_pct calcolati a runtime dai dati
+//       reali (mai salvati, vedi
+//       PRD-addendum-hardening-completamento.md A6):
+//       - weight: peso attuale vs baseline (primo peso mai
+//         registrato) e target_value.
+//       - activity: giorni (da quando il goal è stato creato) in cui
+//         i passi giornalieri hanno raggiunto target_value.
+//       - habit_streak: streak corrente dell'abitudine il cui nome è
+//         contenuto nel titolo del goal (best-effort: goals non ha
+//         un habit_id, non possiamo linkarli in modo univoco senza
+//         modificare lo schema, cosa che questo addendum esclude
+//         esplicitamente — se il titolo non contiene in modo
+//         inequivocabile il nome di un'unica abitudine attiva,
+//         current_value resta null).
+//       - custom: nessun calcolo automatico possibile, resta null.
 //       ?status=in_corso|raggiunto|abbandonato -> filtro opzionale
 // POST /api/goals            -> crea un nuovo obiettivo
 // ============================================================
@@ -10,6 +25,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import type { Tables, TablesInsert } from "@/lib/types";
 import { supabaseServer } from "@/lib/supabase/server";
+import { enrichGoalsWithProgress } from "@/lib/goal-progress";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +55,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ goals: data as Tables<"goals">[] });
+  const goals = await enrichGoalsWithProgress((data ?? []) as Tables<"goals">[]);
+
+  return NextResponse.json({ goals });
 }
 
 export async function POST(request: NextRequest) {

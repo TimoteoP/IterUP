@@ -12,7 +12,10 @@ import { useEffect, useState, type FormEvent } from "react";
 import { colors, radius, spacing, font } from "@/lib/design-tokens";
 import type { Tables } from "@/lib/types";
 
-type Goal = Tables<"goals">;
+// current_value/progress_pct: calcolati a runtime da GET /api/goals
+// dai dati reali (peso/passi/streak abitudine), non persistiti — vedi
+// PRD-addendum-hardening-completamento.md A6.
+type Goal = Tables<"goals"> & { current_value: number | null; progress_pct: number | null };
 type GoalType = Goal["goal_type"];
 type GoalStatus = NonNullable<Goal["status"]>;
 
@@ -300,6 +303,30 @@ function GoalRow({
           Elimina
         </button>
       </div>
+      {goal.progress_pct !== null && (
+        <div>
+          <div
+            style={{
+              height: 6,
+              borderRadius: radius.full,
+              backgroundColor: colors.primaryMuted,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                width: `${goal.progress_pct}%`,
+                height: "100%",
+                backgroundColor: colors.primary,
+              }}
+            />
+          </div>
+          <div style={{ fontSize: font.size.xs, color: colors.textMuted, marginTop: 2 }}>
+            {goal.current_value} / {goal.target_value ?? "?"} ({goal.progress_pct}%) — calcolato automaticamente dai
+            log reali
+          </div>
+        </div>
+      )}
       <div style={{ display: "flex", gap: spacing.xs }}>
         {(["in_corso", "raggiunto", "abbandonato"] as GoalStatus[])
           .filter((s) => s !== currentStatus)
