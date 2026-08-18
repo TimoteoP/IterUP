@@ -23,6 +23,14 @@ import { isMealType, MEAL_TYPES_WITHOUT_FOOD, type MealType } from "@/lib/nutrit
 
 export const dynamic = "force-dynamic";
 
+// Guardrail *soft* (vedi PRD-addendum-hardening-completamento.md A2):
+// non blocca il salvataggio (potrebbe essere corretto, es. un pasto
+// davvero abbondante), ma segnala un possibile errore di battitura
+// (es. 1000g invece di 100g) restituendo un campo `warning` che la UI
+// mostra come avviso.
+const QUANTITY_WARNING_THRESHOLD_G = 2000;
+const KCAL_WARNING_THRESHOLD = 5000;
+
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -151,5 +159,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ log: data }, { status: 201 });
+  let warning: string | undefined;
+  if (data.quantity_g !== null && data.quantity_g > QUANTITY_WARNING_THRESHOLD_G) {
+    warning = `Quantità insolitamente alta (${data.quantity_g}g): controlla che non sia un errore di battitura.`;
+  } else if (data.kcal > KCAL_WARNING_THRESHOLD) {
+    warning = `Calorie insolitamente alte per un singolo log (${Math.round(data.kcal)} kcal): controlla la quantità inserita.`;
+  }
+
+  return NextResponse.json({ log: data, ...(warning ? { warning } : {}) }, { status: 201 });
 }

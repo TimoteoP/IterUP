@@ -71,6 +71,7 @@ export default function DiarioPage() {
   const [mealType, setMealType] = useState<MealType>(inferMealType());
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [logWarning, setLogWarning] = useState<string | null>(null);
   const [showAddFood, setShowAddFood] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -153,6 +154,7 @@ export default function DiarioPage() {
 
     setAdding(true);
     setAddError(null);
+    setLogWarning(null);
     try {
       const res = await fetch("/api/logs", {
         method: "POST",
@@ -166,6 +168,10 @@ export default function DiarioPage() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Errore nel salvataggio");
+      // Guardrail soft: il log è comunque salvato, ma un valore
+      // insolito (es. 1000g invece di 100g digitati per errore) viene
+      // segnalato senza bloccare il salvataggio.
+      if (json.warning) setLogWarning(json.warning);
       clearSelection();
       await refresh();
     } catch (err) {
@@ -576,6 +582,27 @@ export default function DiarioPage() {
         <section className="flex flex-col" style={{ gap: spacing.md }}>
           {loadError && (
             <p style={{ color: colors.danger, fontSize: font.size.sm }}>{loadError}</p>
+          )}
+          {logWarning && (
+            <div
+              className="flex items-start justify-between"
+              style={{
+                backgroundColor: colors.surfaceAlt,
+                border: `1px solid ${colors.warning}`,
+                borderRadius: radius.md,
+                padding: spacing.sm,
+                gap: spacing.sm,
+              }}
+            >
+              <p style={{ color: colors.warning, fontSize: font.size.sm }}>⚠ {logWarning}</p>
+              <button
+                onClick={() => setLogWarning(null)}
+                aria-label="Chiudi avviso"
+                style={{ color: colors.textMuted, fontSize: font.size.md }}
+              >
+                ×
+              </button>
+            </div>
           )}
           {MEAL_TYPES.map((mt) => {
             const items = logsByMeal[mt];
