@@ -97,7 +97,7 @@ export default function AttivitaPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/activity/list?limit=90", {
+      const res = await apiFetch("/api/activity/list?limit=90", {
         cache: "no-store",
       });
       const json = await res.json();

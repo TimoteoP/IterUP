@@ -6,10 +6,11 @@
 // attivi, target macro di oggi). Sola lettura, nessuna scrittura.
 // ============================================================
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import { DIET_MODES, dietaryRegimeLabel } from "@/lib/nutrition-options";
+import { requireApiAuth } from "@/lib/api-auth";
 import { calculateTDEE, calculateAge, type ActivityLevel, type Sex } from "@/lib/tdee";
 import { calculateBMI, bmiCategory, calculateBodyIndex } from "@/lib/body-indices";
 import { calculateStreak } from "@/lib/streak";
@@ -56,7 +57,10 @@ function linearSlope(points: { x: number; y: number }[]): number | null {
   return (n * sumXY - sumX * sumY) / denom;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const today = todayIso();
   const weekStart = startOfWeekIso(today);
   const monthStart = startOfMonthIso(today);

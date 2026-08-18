@@ -13,13 +13,16 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import { upsertBodyMetricsForDate } from "@/lib/body-metrics-store";
 import { validateBodyMetricsPayload, type BodyMetricsPayload } from "./validation";
-import { requireWriteAuth } from "@/lib/api-auth";
+import { requireApiAuth } from "@/lib/api-auth";
 
 // Evita che Next metta in cache le risposte fetch di supabase-js: lo
 // storico deve riflettere sempre l'ultimo stato dopo un upsert/delete.
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const { data, error } = await supabaseServer
     .from("body_metrics")
     .select("*")
@@ -34,7 +37,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const authError = requireWriteAuth(request);
+  const authError = requireApiAuth(request);
   if (authError) return authError;
 
   let body: BodyMetricsPayload;

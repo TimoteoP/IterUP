@@ -17,6 +17,7 @@ import TrendChart from "./TrendChart";
 import StatTile from "./StatTile";
 import HabitStreakCard from "./HabitStreakCard";
 import UnifiedTrendChart from "./UnifiedTrendChart";
+import { apiFetch } from "@/lib/api-client";
 
 interface DashboardData {
   profile: { fullName: string | null; dietaryRegimeLabel: string };
@@ -95,7 +96,7 @@ export default function DashboardClient() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/dashboard");
+        const res = await apiFetch("/api/dashboard");
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Errore nel caricamento della dashboard");
         setData(json);

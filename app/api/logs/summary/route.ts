@@ -15,6 +15,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,9 @@ export type MacroTotals = {
 };
 
 export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const date = request.nextUrl.searchParams.get("date") ?? todayIso();
 
   const [logsResult, targetResult] = await Promise.all([

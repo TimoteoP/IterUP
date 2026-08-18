@@ -20,7 +20,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import type { TablesInsert, Tables } from "@/lib/types";
 import { isMealType, MEAL_TYPES_WITHOUT_FOOD, type MealType } from "@/lib/nutrition-options";
-import { requireWriteAuth } from "@/lib/api-auth";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +47,9 @@ type DailyLogRow = Tables<"daily_logs"> & {
 };
 
 export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const date = request.nextUrl.searchParams.get("date") ?? todayIso();
 
   const { data, error } = await supabaseServer
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authError = requireWriteAuth(request);
+  const authError = requireApiAuth(request);
   if (authError) return authError;
 
   let body: unknown;

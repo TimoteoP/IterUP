@@ -14,9 +14,10 @@
 // `foods`: catalogo condiviso, non dati personali dell'utente.
 // ============================================================
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,10 @@ const USER_ID_COLUMN: Record<string, string> = {
   meal_suggestion_feedback: "user_id",
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const tableNames = Object.keys(USER_ID_COLUMN) as (keyof typeof USER_ID_COLUMN)[];
 
   const results = await Promise.all(

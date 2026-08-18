@@ -11,7 +11,7 @@
 //         precedente e inserisce il nuovo user_targets attivo.
 // ============================================================
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import {
@@ -25,11 +25,14 @@ import {
   type GoalMode,
 } from "@/lib/tdee";
 import { isDietMode, isDietaryRegime, type DietaryRegime } from "@/lib/nutrition-options";
-import { requireWriteAuth } from "@/lib/api-auth";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const [profileResult, weightResult, targetResult] = await Promise.all([
     supabaseServer.from("profiles").select("*").eq("id", CURRENT_USER_ID).maybeSingle(),
     supabaseServer
@@ -175,7 +178,7 @@ function validatePayload(body: unknown): { data: ProfilePayload } | { error: str
 }
 
 export async function POST(request: Request) {
-  const authError = requireWriteAuth(request);
+  const authError = requireApiAuth(request);
   if (authError) return authError;
 
   let rawBody: unknown;

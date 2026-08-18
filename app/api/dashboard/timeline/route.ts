@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import { calculateStreak } from "@/lib/streak";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,9 @@ function isoRange(startIso: string, endIso: string): string[] {
 }
 
 export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const daysParam = Number(request.nextUrl.searchParams.get("days"));
   const days = (ALLOWED_DAYS as readonly number[]).includes(daysParam) ? daysParam : 30;
 

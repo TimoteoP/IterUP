@@ -43,8 +43,8 @@ export default function AbitudiniPage() {
     setError(null);
     try {
       const [habitsRes, logsRes] = await Promise.all([
-        fetch("/api/habits"),
-        fetch(`/api/habits/log?date=${todayISODate()}`),
+        apiFetch("/api/habits"),
+        apiFetch(`/api/habits/log?date=${todayISODate()}`),
       ]);
       const habitsJson = await habitsRes.json();
       const logsJson = await logsRes.json();

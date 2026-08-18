@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import type { Tables, TablesUpdate } from "@/lib/types";
 import { supabaseServer } from "@/lib/supabase/server";
-import { requireWriteAuth } from "@/lib/api-auth";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const authError = requireWriteAuth(request);
+  const authError = requireApiAuth(request);
   if (authError) return authError;
 
   const body = await request.json().catch(() => null);
@@ -72,7 +72,7 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const authError = requireWriteAuth(request);
+  const authError = requireApiAuth(request);
   if (authError) return authError;
 
   const { error } = await supabaseServer.from("habits")

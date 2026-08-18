@@ -44,7 +44,7 @@ export default function SupplementChat() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/supplements/chat")
+    apiFetch("/api/supplements/chat")
       .then((res) => res.json())
       .then((json) => setMessages(json.messages ?? []))
       .catch(() => setError("Errore nel caricamento della cronologia"))
@@ -76,7 +76,7 @@ export default function SupplementChat() {
       setError(err instanceof Error ? err.message : "Errore sconosciuto");
       // Il messaggio utente potrebbe essere stato salvato lato server
       // anche se la chiamata AI è fallita: ricarichiamo per certezza.
-      fetch("/api/supplements/chat")
+      apiFetch("/api/supplements/chat")
         .then((res) => res.json())
         .then((json) => setMessages(json.messages ?? []))
         .catch(() => {});

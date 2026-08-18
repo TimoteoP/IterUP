@@ -19,6 +19,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,9 @@ async function searchTrigram(q: string, limit: number) {
 }
 
 export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const searchParams = request.nextUrl.searchParams;
   const q = (searchParams.get("q") ?? "").trim();
   const limitParam = Number(searchParams.get("limit"));

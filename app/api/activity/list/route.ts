@@ -10,10 +10,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import { errorResponse } from "../_utils";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const limitParam = request.nextUrl.searchParams.get("limit");
   const parsedLimit = limitParam ? Number(limitParam) : NaN;
   const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? parsedLimit : 60;

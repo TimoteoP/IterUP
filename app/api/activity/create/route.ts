@@ -11,12 +11,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import { todayISODate, errorResponse, isFiniteNumber, type ActivityPayload } from "../_utils";
-import { requireWriteAuth } from "@/lib/api-auth";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const authError = requireWriteAuth(request);
+  const authError = requireApiAuth(request);
   if (authError) return authError;
 
   let body: ActivityPayload;

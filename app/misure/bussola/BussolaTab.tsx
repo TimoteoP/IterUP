@@ -15,6 +15,7 @@ import CompassGauge from "./CompassGauge";
 import Breakdown from "./Breakdown";
 import CompositionTrendChart from "./CompositionTrendChart";
 import type { DirectionZone } from "@/lib/composition";
+import { apiFetch } from "@/lib/api-client";
 
 interface CompositionData {
   hasProfile: boolean;
@@ -50,7 +51,7 @@ export default function BussolaTab() {
 
   const refresh = useCallback(async () => {
     try {
-      const [compRes, profileRes] = await Promise.all([fetch("/api/composition"), fetch("/api/profile")]);
+      const [compRes, profileRes] = await Promise.all([apiFetch("/api/composition"), apiFetch("/api/profile")]);
       const compJson = await compRes.json();
       const profileJson = await profileRes.json();
       if (!compRes.ok) throw new Error(compJson.error ?? "Errore nel caricamento della bussola");

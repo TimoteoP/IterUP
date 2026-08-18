@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import type { TablesInsert } from "@/lib/types";
-import { requireWriteAuth } from "@/lib/api-auth";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,7 @@ function isFiniteNonNegative(v: unknown): v is number {
 }
 
 export async function POST(request: NextRequest) {
-  const authError = requireWriteAuth(request);
+  const authError = requireApiAuth(request);
   if (authError) return authError;
 
   const body = await request.json().catch(() => null);

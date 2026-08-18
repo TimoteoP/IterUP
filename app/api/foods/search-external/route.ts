@@ -11,6 +11,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +55,9 @@ function isFiniteNumber(v: unknown): v is number {
 }
 
 export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const q = (request.nextUrl.searchParams.get("q") ?? "").trim();
   if (q.length < 2) {
     return NextResponse.json({ foods: [] });

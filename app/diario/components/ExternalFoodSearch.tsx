@@ -45,7 +45,7 @@ export default function ExternalFoodSearch({ initialQuery, onImported, onCancel 
     setError(null);
     setSearched(true);
     try {
-      const res = await fetch(`/api/foods/search-external?q=${encodeURIComponent(query.trim())}`);
+      const res = await apiFetch(`/api/foods/search-external?q=${encodeURIComponent(query.trim())}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Errore nella ricerca online");
       setCandidates(json.foods ?? []);

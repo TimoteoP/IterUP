@@ -7,10 +7,11 @@
 // PRD-addendum-bussola-ricomposizione.md.
 // ============================================================
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
 import { calculateAge, type ActivityLevel, type Sex } from "@/lib/tdee";
+import { requireApiAuth } from "@/lib/api-auth";
 import {
   calculateNavyBF,
   calculateFatMass,
@@ -25,7 +26,10 @@ import {
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const authError = requireApiAuth(request);
+  if (authError) return authError;
+
   const [profileResult, historyResult] = await Promise.all([
     supabaseServer
       .from("profiles")

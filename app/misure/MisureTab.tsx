@@ -84,7 +84,7 @@ export default function MisurePage() {
   async function loadHistory() {
     setLoadingHistory(true);
     try {
-      const res = await fetch("/api/body-metrics", { cache: "no-store" });
+      const res = await apiFetch("/api/body-metrics", { cache: "no-store" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Errore nel caricamento dello storico.");
       const rows: BodyMetric[] = json.data ?? [];

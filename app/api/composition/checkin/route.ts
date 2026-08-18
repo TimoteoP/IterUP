@@ -20,7 +20,7 @@ import { CURRENT_USER_ID } from "@/lib/config";
 import { upsertBodyMetricsForDate } from "@/lib/body-metrics-store";
 import { WEIGHT_RANGE, CIRCUMFERENCE_RANGE, todayISODate } from "@/app/api/body-metrics/validation";
 import { HIP_CM_RANGE, KCAL_PERIOD_RANGE } from "@/lib/composition";
-import { requireWriteAuth } from "@/lib/api-auth";
+import { requireApiAuth } from "@/lib/api-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +35,7 @@ function isFeelValue(v: unknown): v is -1 | 0 | 1 {
 }
 
 export async function POST(request: NextRequest) {
-  const authError = requireWriteAuth(request);
+  const authError = requireApiAuth(request);
   if (authError) return authError;
 
   const body = await request.json().catch(() => null);

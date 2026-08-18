@@ -18,6 +18,7 @@ import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import ProfileForm, { PROFILE_FORM_INITIAL_STATE, type ProfileFormState } from "./ProfileForm";
 import SupplementsManager from "./SupplementsManager";
 import SupplementChat from "./SupplementChat";
+import { apiFetch } from "@/lib/api-client";
 
 const cardStyle: React.CSSProperties = {
   backgroundColor: colors.surface,
@@ -39,7 +40,7 @@ export default function ImpostazioniPage() {
     setExporting(true);
     setExportError(null);
     try {
-      const res = await fetch("/api/export");
+      const res = await apiFetch("/api/export");
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Errore nell'esportazione");
 
@@ -62,7 +63,7 @@ export default function ImpostazioniPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/profile");
+        const res = await apiFetch("/api/profile");
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? "Errore nel caricamento del profilo");
 

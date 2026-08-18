@@ -39,7 +39,7 @@ export default function SupplementsManager() {
   async function refresh() {
     setLoading(true);
     try {
-      const res = await fetch("/api/supplements");
+      const res = await apiFetch("/api/supplements");
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Errore nel caricamento");
       setItems(json.supplements ?? []);

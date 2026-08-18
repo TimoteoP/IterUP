@@ -55,7 +55,7 @@ export default function ObiettiviPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/goals");
+      const res = await apiFetch("/api/goals");
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Errore nel caricamento obiettivi");
       setGoals(json.goals ?? []);

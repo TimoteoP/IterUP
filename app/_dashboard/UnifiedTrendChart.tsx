@@ -14,6 +14,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { colors, spacing, radius, font } from "@/lib/design-tokens";
+import { apiFetch } from "@/lib/api-client";
 
 interface TimelinePoint {
   date: string;
@@ -149,7 +150,7 @@ export default function UnifiedTrendChart() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/dashboard/timeline?days=${days}`)
+    apiFetch(`/api/dashboard/timeline?days=${days}`)
       .then((res) => res.json())
       .then((json) => {
         if (cancelled) return;

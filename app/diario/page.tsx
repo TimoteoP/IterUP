@@ -97,8 +97,8 @@ export default function DiarioPage() {
     setLoadError(null);
     try {
       const [logsRes, summaryRes] = await Promise.all([
-        fetch(`/api/logs?date=${date}`),
-        fetch(`/api/logs/summary?date=${date}`),
+        apiFetch(`/api/logs?date=${date}`),
+        apiFetch(`/api/logs/summary?date=${date}`),
       ]);
       const logsJson = await logsRes.json();
       const summaryJson = await summaryRes.json();
@@ -182,7 +182,7 @@ export default function DiarioPage() {
     setSearching(true);
     const timeout = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/foods/search?q=${encodeURIComponent(term)}`);
+        const res = await apiFetch(`/api/foods/search?q=${encodeURIComponent(term)}`);
         const json = await res.json();
         setResults(res.ok ? json.foods ?? [] : []);
       } catch {
