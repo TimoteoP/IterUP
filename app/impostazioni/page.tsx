@@ -31,6 +31,32 @@ export default function ImpostazioniPage() {
   const [isFirstRun, setIsFirstRun] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function handleExport() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const res = await fetch("/api/export");
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Errore nell'esportazione");
+
+      const blob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `iterup-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Errore sconosciuto");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -142,6 +168,43 @@ export default function ImpostazioniPage() {
             Integratori
           </h2>
           <SupplementsManager />
+        </section>
+
+        <section style={cardStyle}>
+          <h2
+            style={{
+              fontSize: font.size.md,
+              fontWeight: font.weight.semibold,
+              marginBottom: spacing.md,
+            }}
+          >
+            Backup dati
+          </h2>
+          <p style={{ color: colors.textSecondary, fontSize: font.size.sm, marginBottom: spacing.md }}>
+            Scarica un JSON con tutto il tuo storico (profilo, diario, misure, attività,
+            abitudini, obiettivi, integratori). Nessun account, nessun recupero automatico:
+            questo è l&apos;unica rete di sicurezza.
+          </p>
+          {exportError && (
+            <p style={{ color: colors.danger, fontSize: font.size.sm, marginBottom: spacing.md }}>{exportError}</p>
+          )}
+          <button
+            type="button"
+            onClick={handleExport}
+            disabled={exporting}
+            style={{
+              backgroundColor: colors.surfaceAlt,
+              border: `1px solid ${colors.border}`,
+              borderRadius: radius.md,
+              padding: `${spacing.sm} ${spacing.md}`,
+              fontSize: font.size.sm,
+              fontWeight: font.weight.semibold,
+              color: colors.textPrimary,
+              opacity: exporting ? 0.6 : 1,
+            }}
+          >
+            {exporting ? "Esportazione…" : "Esporta i miei dati"}
+          </button>
         </section>
       </div>
     </main>
