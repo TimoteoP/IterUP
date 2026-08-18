@@ -476,7 +476,15 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      // Vedi schema-migration-006-trgm.sql: ricerca alimenti
+      // tollerante ai typo (fallback quando full-text/ilike non
+      // trovano nulla).
+      search_foods_trgm: {
+        Args: { search_term: string; match_limit?: number };
+        Returns: Database["public"]["Tables"]["foods"]["Row"][];
+      };
+    };
     Enums: Record<string, never>;
   };
 }

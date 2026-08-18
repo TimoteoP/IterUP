@@ -77,6 +77,24 @@ create table if not exists public.foods (
 create index if not exists idx_foods_category on public.foods(category);
 create index if not exists idx_foods_name on public.foods using gin (to_tsvector('italian', name));
 
+-- Ricerca tollerante ai typo (fallback quando il full-text sopra non
+-- trova nulla, es. "pomodooro") — vedi
+-- PRD-addendum-hardening-completamento.md A5.
+create extension if not exists pg_trgm;
+create index if not exists idx_foods_name_trgm on public.foods using gin (name gin_trgm_ops);
+
+create or replace function public.search_foods_trgm(search_term text, match_limit int default 20)
+returns setof public.foods
+language sql
+stable
+as $$
+  select *
+  from public.foods
+  where similarity(name, search_term) > 0.2
+  order by similarity(name, search_term) desc
+  limit match_limit;
+$$;
+
 -- ------------------------------------------------------------
 -- 4. DIARIO ALIMENTARE
 -- ------------------------------------------------------------

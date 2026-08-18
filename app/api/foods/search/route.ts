@@ -1,11 +1,17 @@
 // ============================================================
 // IterUp — GET /api/foods/search?q=<termine>
 // ------------------------------------------------------------
-// Ricerca full-text (italiano) sulla tabella `foods.name`, che ha
-// un indice gin(to_tsvector('italian', name)) — vedi schema.sql.
-// Per query molto corte (1-2 caratteri) il full-text di Postgres
-// spesso non produce lexeme utili (o va in errore su token vuoti
-// tipo "e", "a"...), quindi usiamo un fallback ilike '%term%'.
+// Tre livelli di ricerca, in ordine (ognuno tentato solo se il
+// precedente non trova nulla):
+// 1. Full-text italiano su foods.name (indice
+//    gin(to_tsvector('italian', name))).
+// 2. ilike '%term%' — fallback per query molto corte (1-2 caratteri,
+//    dove il full-text spesso non produce lexeme utili) o quando il
+//    full-text non trova nulla (termine parziale/prefisso).
+// 3. Similarity trigram (pg_trgm, RPC search_foods_trgm — vedi
+//    schema-migration-006-trgm.sql) — tollerante a errori di
+//    battitura (es. "pomodooro"), dove ilike '%pomodooro%' non
+//    troverebbe "Pomodori". Vedi PRD-addendum-hardening-completamento.md A5.
 //
 // Nessuna scrittura qui: la tabella foods è pubblica in lettura
 // (policy "foods_read_all"), non serve filtrare su CURRENT_USER_ID.
@@ -17,6 +23,17 @@ import { supabaseServer } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_LIMIT = 20;
+const FOOD_COLUMNS = "id, name, category, kcal_100g, protein_100g, carbs_100g, fat_100g, fiber_100g";
+
+async function searchIlike(q: string, limit: number) {
+  return supabaseServer.from("foods").select(FOOD_COLUMNS).ilike("name", `%${q}%`).order("name", { ascending: true }).limit(limit);
+}
+
+async function searchTrigram(q: string, limit: number) {
+  // RPC dedicata: PostgREST non permette di ordinare per una funzione
+  // arbitraria (similarity()) direttamente dal query builder.
+  return supabaseServer.rpc("search_foods_trgm", { search_term: q, match_limit: limit });
+}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -33,28 +50,26 @@ export async function GET(request: NextRequest) {
 
   // Query molto corte: il full-text (websearch_to_tsquery) su 1-2
   // caratteri spesso non trova nulla (parole troppo corte per i
-  // lexeme italiani). Fallback su ilike, meno preciso ma affidabile.
+  // lexeme italiani). Si parte direttamente da ilike.
   if (q.length < 3) {
-    const { data, error } = await supabaseServer
-      .from("foods")
-      .select(
-        "id, name, category, kcal_100g, protein_100g, carbs_100g, fat_100g, fiber_100g"
-      )
-      .ilike("name", `%${q}%`)
-      .order("name", { ascending: true })
-      .limit(limit);
-
+    const { data, error } = await searchIlike(q, limit);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    return NextResponse.json({ foods: data ?? [] });
+    if ((data ?? []).length > 0) {
+      return NextResponse.json({ foods: data });
+    }
+
+    const { data: trgmData, error: trgmError } = await searchTrigram(q, limit);
+    if (trgmError) {
+      return NextResponse.json({ error: trgmError.message }, { status: 500 });
+    }
+    return NextResponse.json({ foods: trgmData ?? [] });
   }
 
   const { data, error } = await supabaseServer
     .from("foods")
-    .select(
-      "id, name, category, kcal_100g, protein_100g, carbs_100g, fat_100g, fiber_100g"
-    )
+    .select(FOOD_COLUMNS)
     .textSearch("name", q, { type: "websearch", config: "italian" })
     .order("name", { ascending: true })
     .limit(limit);
@@ -62,25 +77,24 @@ export async function GET(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-
-  // Se il full-text non trova nulla (es. termine parziale/prefisso,
-  // tipico mentre l'utente sta ancora digitando), fallback a ilike
-  // per non lasciare la ricerca "vuota" senza motivo apparente.
-  if ((data ?? []).length === 0) {
-    const { data: fallbackData, error: fallbackError } = await supabaseServer
-      .from("foods")
-      .select(
-        "id, name, category, kcal_100g, protein_100g, carbs_100g, fat_100g, fiber_100g"
-      )
-      .ilike("name", `%${q}%`)
-      .order("name", { ascending: true })
-      .limit(limit);
-
-    if (fallbackError) {
-      return NextResponse.json({ error: fallbackError.message }, { status: 500 });
-    }
-    return NextResponse.json({ foods: fallbackData ?? [] });
+  if ((data ?? []).length > 0) {
+    return NextResponse.json({ foods: data });
   }
 
-  return NextResponse.json({ foods: data ?? [] });
+  // Full-text vuoto (es. termine parziale/prefisso): fallback a ilike.
+  const { data: ilikeData, error: ilikeError } = await searchIlike(q, limit);
+  if (ilikeError) {
+    return NextResponse.json({ error: ilikeError.message }, { status: 500 });
+  }
+  if ((ilikeData ?? []).length > 0) {
+    return NextResponse.json({ foods: ilikeData });
+  }
+
+  // Ancora vuoto: probabile errore di battitura, ultimo tentativo
+  // tollerante via similarity trigram.
+  const { data: trgmData, error: trgmError } = await searchTrigram(q, limit);
+  if (trgmError) {
+    return NextResponse.json({ error: trgmError.message }, { status: 500 });
+  }
+  return NextResponse.json({ foods: trgmData ?? [] });
 }

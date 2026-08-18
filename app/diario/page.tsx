@@ -5,6 +5,7 @@ import { colors, spacing, radius, font } from "@/lib/design-tokens";
 import MacroProgressBar from "./MacroProgressBar";
 import MealSuggestions from "./components/MealSuggestions";
 import AddFoodForm from "./components/AddFoodForm";
+import ExternalFoodSearch from "./components/ExternalFoodSearch";
 import { MEAL_TYPES_WITHOUT_FOOD } from "@/lib/nutrition-options";
 import {
   generateClientId,
@@ -80,6 +81,7 @@ export default function DiarioPage() {
   const [addError, setAddError] = useState<string | null>(null);
   const [logWarning, setLogWarning] = useState<string | null>(null);
   const [showAddFood, setShowAddFood] = useState(false);
+  const [showExternalSearch, setShowExternalSearch] = useState(false);
 
   // Coda offline (vedi PRD-addendum-hardening-completamento.md A4): un
   // log che fallisce per assenza di rete appare comunque subito in UI
@@ -573,6 +575,13 @@ export default function DiarioPage() {
                     >
                       + Aggiungi &quot;{query.trim()}&quot; come nuovo alimento
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowExternalSearch(true)}
+                      style={{ color: colors.accent, fontSize: font.size.sm, textAlign: "left" }}
+                    >
+                      🌐 Cerca &quot;{query.trim()}&quot; online (Open Food Facts)
+                    </button>
                   </div>
                 )}
                 {!searching &&
@@ -598,18 +607,23 @@ export default function DiarioPage() {
               </div>
             )}
 
-            {!showAddFood && !selectedFood && (
-              <button
-                type="button"
-                onClick={() => setShowAddFood(true)}
-                style={{
-                  alignSelf: "flex-start",
-                  color: colors.textMuted,
-                  fontSize: font.size.xs,
-                }}
-              >
-                Non trovi l&apos;alimento? Aggiungilo al database
-              </button>
+            {!showAddFood && !showExternalSearch && !selectedFood && (
+              <div className="flex" style={{ gap: spacing.md }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddFood(true)}
+                  style={{ alignSelf: "flex-start", color: colors.textMuted, fontSize: font.size.xs }}
+                >
+                  Non trovi l&apos;alimento? Aggiungilo al database
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowExternalSearch(true)}
+                  style={{ alignSelf: "flex-start", color: colors.textMuted, fontSize: font.size.xs }}
+                >
+                  🌐 Cerca online
+                </button>
+              </div>
             )}
 
             {showAddFood && (
@@ -617,6 +631,17 @@ export default function DiarioPage() {
                 initialName={query.trim()}
                 onCreated={handleFoodCreated}
                 onCancel={() => setShowAddFood(false)}
+              />
+            )}
+
+            {showExternalSearch && (
+              <ExternalFoodSearch
+                initialQuery={query.trim()}
+                onImported={(food) => {
+                  setShowExternalSearch(false);
+                  handleFoodCreated(food);
+                }}
+                onCancel={() => setShowExternalSearch(false)}
               />
             )}
           </div>

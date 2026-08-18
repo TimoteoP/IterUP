@@ -1,10 +1,13 @@
 // ============================================================
 // IterUp — POST /api/foods
 // ------------------------------------------------------------
-// Crea un nuovo alimento nel DB condiviso `foods` (source = 'manual',
-// per distinguerlo dalle ~180 voci curate da USDA). Nessuna scrittura
-// filtrata su CURRENT_USER_ID: `foods` non è per-utente, è il
-// catalogo condiviso da cui pescano diario e generatore pasti AI.
+// Crea un nuovo alimento nel DB condiviso `foods`. `source` è
+// 'manual' (default, alimento inserito a mano) o 'off' (importato da
+// Open Food Facts via /api/foods/search-external, vedi
+// PRD-addendum-hardening-completamento.md A5) — mai 'usda', riservato
+// al seed iniziale (import-foods.mjs). Nessuna scrittura filtrata su
+// CURRENT_USER_ID: `foods` non è per-utente, è il catalogo condiviso
+// da cui pescano diario e generatore pasti AI.
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,6 +15,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import type { TablesInsert } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+const ALLOWED_SOURCES = ["manual", "off"] as const;
 
 function isFiniteNonNegative(v: unknown): v is number {
   return typeof v === "number" && Number.isFinite(v) && v >= 0;
@@ -39,6 +44,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "fiber_100g deve essere un numero >= 0." }, { status: 400 });
   }
 
+  const source = ALLOWED_SOURCES.includes(body.source) ? body.source : "manual";
+  const source_id = typeof body.source_id === "string" && body.source_id.trim() ? body.source_id.trim() : null;
+
   const payload: TablesInsert<"foods"> = {
     name,
     category,
@@ -47,7 +55,8 @@ export async function POST(request: NextRequest) {
     carbs_100g: body.carbs_100g,
     fat_100g: body.fat_100g,
     fiber_100g: body.fiber_100g ?? null,
-    source: "manual",
+    source,
+    source_id,
   };
 
   const { data, error } = await supabaseServer.from("foods").insert(payload).select().single();
