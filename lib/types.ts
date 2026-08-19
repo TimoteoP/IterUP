@@ -39,6 +39,7 @@ export interface Database {
             | "molto_attivo"
             | null;
           dietary_regime: string | null;
+          custom_macro_split: Json | null;
           allergies: string[];
           preferences: string[];
           created_at: string | null;
@@ -58,6 +59,7 @@ export interface Database {
             | "molto_attivo"
             | null;
           dietary_regime?: string | null;
+          custom_macro_split?: Json | null;
           allergies?: string[];
           preferences?: string[];
           created_at?: string | null;
@@ -77,6 +79,7 @@ export interface Database {
             | "molto_attivo"
             | null;
           dietary_regime?: string | null;
+          custom_macro_split?: Json | null;
           allergies?: string[];
           preferences?: string[];
           created_at?: string | null;

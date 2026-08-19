@@ -74,12 +74,35 @@ const REGIME_MACRO_SPLITS: Record<string, MacroSplit> = {
 };
 
 // Split di fallback per regimi custom creati liberamente dall'utente
-// (non in REGIME_MACRO_SPLITS): un mix bilanciato, non specifico.
+// (non in REGIME_MACRO_SPLITS) quando non hanno impostato un loro
+// split personalizzato: un mix bilanciato, non specifico.
 const DEFAULT_MACRO_SPLIT: MacroSplit = { carbPct: 45, proteinPct: 30, fatPct: 25 };
 
-/** Split macro (% carb/proteine/grassi) per un regime: preset noto o fallback bilanciato. */
-export function macroSplitForRegime(regime: string): MacroSplit {
-  return REGIME_MACRO_SPLITS[regime] ?? DEFAULT_MACRO_SPLIT;
+const MACRO_SPLIT_SUM_TOLERANCE = 0.5;
+
+/** Valida uno split macro: tre numeri finiti, non negativi, che sommano a 100 (± arrotondamento). */
+export function isValidMacroSplit(value: unknown): value is MacroSplit {
+  if (typeof value !== "object" || value === null) return false;
+  const v = value as Record<string, unknown>;
+  const { carbPct, proteinPct, fatPct } = v;
+  if (![carbPct, proteinPct, fatPct].every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0)) {
+    return false;
+  }
+  const sum = (carbPct as number) + (proteinPct as number) + (fatPct as number);
+  return Math.abs(sum - 100) <= MACRO_SPLIT_SUM_TOLERANCE;
+}
+
+/**
+ * Split macro (% carb/proteine/grassi) per un regime: preset noto
+ * (ha sempre la priorità), altrimenti lo split personalizzato
+ * dell'utente se presente e valido (vedi profiles.custom_macro_split
+ * e isValidMacroSplit), altrimenti il fallback generico bilanciato.
+ */
+export function macroSplitForRegime(regime: string, customSplit?: unknown): MacroSplit {
+  const preset = REGIME_MACRO_SPLITS[regime];
+  if (preset) return preset;
+  if (isValidMacroSplit(customSplit)) return customSplit;
+  return DEFAULT_MACRO_SPLIT;
 }
 
 export const MEAL_TYPES = [

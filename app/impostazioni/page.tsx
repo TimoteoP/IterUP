@@ -79,6 +79,7 @@ export default function ImpostazioniPage() {
           activityLevel: p?.activity_level ?? "",
           mode: json.activeMode ?? "",
           dietaryRegime: p?.dietary_regime ?? "mediterraneo",
+          customMacroSplit: p?.custom_macro_split ?? null,
           allergies: p?.allergies ?? [],
           preferences: p?.preferences ?? [],
         });

@@ -23,7 +23,13 @@ import {
   type GoalMode,
   type Sex,
 } from "@/lib/tdee";
-import { DIET_MODES, DIETARY_REGIME_PRESETS, type DietaryRegime } from "@/lib/nutrition-options";
+import {
+  DIET_MODES,
+  DIETARY_REGIME_PRESETS,
+  isValidMacroSplit,
+  type DietaryRegime,
+  type MacroSplit,
+} from "@/lib/nutrition-options";
 import TagListInput from "./TagListInput";
 
 export interface ProfileFormState {
@@ -35,6 +41,8 @@ export interface ProfileFormState {
   activityLevel: ActivityLevel | "";
   mode: GoalMode | "";
   dietaryRegime: DietaryRegime;
+  /** Split macro (%) per regimi non tra i preset noti — null finché non impostato. */
+  customMacroSplit: MacroSplit | null;
   allergies: string[];
   preferences: string[];
 }
@@ -48,6 +56,7 @@ export const PROFILE_FORM_INITIAL_STATE: ProfileFormState = {
   activityLevel: "",
   mode: "",
   dietaryRegime: "mediterraneo",
+  customMacroSplit: null,
   allergies: [],
   preferences: [],
 };
@@ -121,8 +130,28 @@ export default function ProfileForm({
   const [addingRegime, setAddingRegime] = useState(false);
   const [customRegimeDraft, setCustomRegimeDraft] = useState("");
 
+  // Campi testo separati per lo split macro custom: permettono di
+  // digitare liberamente (anche valori temporaneamente incompleti)
+  // senza forzare subito un MacroSplit valido in form.customMacroSplit.
+  const initialSplit = initialValues?.customMacroSplit ?? null;
+  const [carbPctInput, setCarbPctInput] = useState(initialSplit ? String(initialSplit.carbPct) : "");
+  const [proteinPctInput, setProteinPctInput] = useState(initialSplit ? String(initialSplit.proteinPct) : "");
+  const [fatPctInput, setFatPctInput] = useState(initialSplit ? String(initialSplit.fatPct) : "");
+
+  const isCustomRegime = !DIETARY_REGIME_PRESETS.some((opt) => opt.value === form.dietaryRegime);
+
   function update<K extends keyof ProfileFormState>(key: K, value: ProfileFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const splitSum =
+    (Number(carbPctInput) || 0) + (Number(proteinPctInput) || 0) + (Number(fatPctInput) || 0);
+  const hasSplitInput = carbPctInput !== "" || proteinPctInput !== "" || fatPctInput !== "";
+
+  /** Split macro custom da salvare: null se i 3 campi sono vuoti, altrimenti il valore digitato (validato più avanti). */
+  function resolveCustomMacroSplit(): MacroSplit | null {
+    if (!hasSplitInput) return null;
+    return { carbPct: Number(carbPctInput), proteinPct: Number(proteinPctInput), fatPct: Number(fatPctInput) };
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -132,6 +161,12 @@ export default function ProfileForm({
     const validationError = validate(form);
     if (validationError) {
       setError(validationError);
+      return;
+    }
+
+    const customMacroSplit = resolveCustomMacroSplit();
+    if (customMacroSplit !== null && !isValidMacroSplit(customMacroSplit)) {
+      setError("Lo split macro personalizzato deve sommare a 100% (carbo + proteine + grassi).");
       return;
     }
 
@@ -148,6 +183,7 @@ export default function ProfileForm({
           weightKg: Number(form.weightKg),
           activityLevel: form.activityLevel,
           mode: form.mode,
+          customMacroSplit,
           dietaryRegime: form.dietaryRegime,
           allergies: form.allergies,
           preferences: form.preferences,
@@ -389,6 +425,78 @@ export default function ProfileForm({
           </select>
         )}
       </div>
+
+      {isCustomRegime && !addingRegime && (
+        <div>
+          <label style={labelStyle}>Split macro per &quot;{form.dietaryRegime}&quot; (facoltativo)</label>
+          <p style={{ color: colors.textMuted, fontSize: font.size.xs, marginBottom: spacing.xs }}>
+            Questo regime non ha uno split predefinito. Lascia vuoto per usare un mix
+            generico (45% carbo / 30% proteine / 25% grassi), oppure specifica le tue
+            percentuali (devono sommare a 100%).
+          </p>
+          <div className="grid grid-cols-3" style={{ gap: spacing.sm }}>
+            <div>
+              <label style={{ ...labelStyle, fontSize: font.size.xs }} htmlFor="carbPct">
+                Carbo %
+              </label>
+              <input
+                id="carbPct"
+                type="number"
+                inputMode="decimal"
+                style={inputStyle}
+                value={carbPctInput}
+                onChange={(e) => setCarbPctInput(e.target.value)}
+                min={0}
+                max={100}
+                placeholder="10"
+              />
+            </div>
+            <div>
+              <label style={{ ...labelStyle, fontSize: font.size.xs }} htmlFor="proteinPct">
+                Proteine %
+              </label>
+              <input
+                id="proteinPct"
+                type="number"
+                inputMode="decimal"
+                style={inputStyle}
+                value={proteinPctInput}
+                onChange={(e) => setProteinPctInput(e.target.value)}
+                min={0}
+                max={100}
+                placeholder="35"
+              />
+            </div>
+            <div>
+              <label style={{ ...labelStyle, fontSize: font.size.xs }} htmlFor="fatPct">
+                Grassi %
+              </label>
+              <input
+                id="fatPct"
+                type="number"
+                inputMode="decimal"
+                style={inputStyle}
+                value={fatPctInput}
+                onChange={(e) => setFatPctInput(e.target.value)}
+                min={0}
+                max={100}
+                placeholder="55"
+              />
+            </div>
+          </div>
+          {hasSplitInput && (
+            <p
+              style={{
+                fontSize: font.size.xs,
+                marginTop: spacing.xs,
+                color: splitSum === 100 ? colors.primary : colors.danger,
+              }}
+            >
+              Somma attuale: {splitSum}% {splitSum === 100 ? "✓" : "— deve fare 100%"}
+            </p>
+          )}
+        </div>
+      )}
 
       <div>
         <label style={labelStyle}>Allergie e intolleranze</label>

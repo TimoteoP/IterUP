@@ -29,6 +29,12 @@ create table if not exists public.profiles (
   -- dalla UI) — nessun CHECK, i preset noti vivono solo lato codice
   -- in /lib/nutrition-options.ts, non nello schema.
   dietary_regime text default 'mediterraneo',
+  -- Split macro (%) scelto dall'utente per il regime attuale, SOLO
+  -- quando questo non è tra i preset noti (che hanno uno split fisso
+  -- in lib/nutrition-options.ts). Forma: {"carbPct":n,"proteinPct":n,
+  -- "fatPct":n}, somma 100. Null = nessuno split custom impostato
+  -- (fallback generico 45/30/25). Vedi schema-migration-009.
+  custom_macro_split jsonb,
   -- Vincolo HARD per il generatore AI: mai proporre pasti con questi ingredienti.
   allergies text[] not null default '{}',
   -- Vincolo SOFT: preferenze di gusto, orientano ma non bloccano.

@@ -24,8 +24,9 @@ import {
   type ActivityLevel,
   type GoalMode,
 } from "@/lib/tdee";
-import { isDietMode, isDietaryRegime, type DietaryRegime } from "@/lib/nutrition-options";
+import { isDietMode, isDietaryRegime, isValidMacroSplit, type DietaryRegime, type MacroSplit } from "@/lib/nutrition-options";
 import { requireApiAuth } from "@/lib/api-auth";
+import type { Json } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,8 @@ interface ProfilePayload {
   activityLevel: ActivityLevel;
   mode: GoalMode;
   dietaryRegime: DietaryRegime;
+  /** Split macro custom (%), solo per regimi non tra i preset noti — vedi lib/nutrition-options.ts. */
+  customMacroSplit: MacroSplit | null;
   allergies: string[];
   preferences: string[];
 }
@@ -158,6 +161,14 @@ function validatePayload(body: unknown): { data: ProfilePayload } | { error: str
   }
   const dietaryRegime = b.dietaryRegime;
 
+  let customMacroSplit: MacroSplit | null = null;
+  if (b.customMacroSplit !== undefined && b.customMacroSplit !== null) {
+    if (!isValidMacroSplit(b.customMacroSplit)) {
+      return { error: "Lo split macro personalizzato deve avere carbo+proteine+grassi che sommano a 100%." };
+    }
+    customMacroSplit = b.customMacroSplit;
+  }
+
   const allergies = isStringArray(b.allergies) ? cleanStringList(b.allergies) : [];
   const preferences = isStringArray(b.preferences) ? cleanStringList(b.preferences) : [];
 
@@ -171,6 +182,7 @@ function validatePayload(body: unknown): { data: ProfilePayload } | { error: str
       activityLevel,
       mode,
       dietaryRegime,
+      customMacroSplit,
       allergies,
       preferences,
     },
@@ -201,6 +213,7 @@ export async function POST(request: Request) {
     activityLevel,
     mode,
     dietaryRegime,
+    customMacroSplit,
     allergies,
     preferences,
   } = validation.data;
@@ -220,6 +233,7 @@ export async function POST(request: Request) {
         height_cm: heightCm,
         activity_level: activityLevel,
         dietary_regime: dietaryRegime,
+        custom_macro_split: customMacroSplit as unknown as Json,
         allergies,
         preferences,
         updated_at: new Date().toISOString(),
@@ -263,6 +277,7 @@ export async function POST(request: Request) {
     activityLevel,
     mode,
     dietaryRegime,
+    customMacroSplit,
   });
 
   // 4. disattiva i target precedenti, poi inserisce il nuovo target attivo

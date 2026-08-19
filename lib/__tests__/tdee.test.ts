@@ -140,4 +140,23 @@ describe("Regressione: bug storico ~462g proteine/giorno", () => {
     expect((r.proteinG * 4) / r.dailyKcal).toBeCloseTo(0.3, 1);
     expect((r.fatG * 9) / r.dailyKcal).toBeCloseTo(0.15, 1);
   });
+
+  it("regime custom senza split personalizzato: usa il fallback bilanciato 45/30/25 (regressione bug segnalato dall'utente)", () => {
+    const r = calculateTDEE({ ...BASE, mode: "dimagrimento", dietaryRegime: "Digiuno Integrato" });
+    expect((r.carbsG * 4) / r.dailyKcal).toBeCloseTo(0.45, 1);
+    expect((r.proteinG * 4) / r.dailyKcal).toBeCloseTo(0.3, 1);
+    expect((r.fatG * 9) / r.dailyKcal).toBeCloseTo(0.25, 1);
+  });
+
+  it("regime custom CON split personalizzato: usa lo split fornito dall'utente, non il fallback", () => {
+    const r = calculateTDEE({
+      ...BASE,
+      mode: "dimagrimento",
+      dietaryRegime: "Digiuno Integrato",
+      customMacroSplit: { carbPct: 15, proteinPct: 40, fatPct: 45 },
+    });
+    expect((r.carbsG * 4) / r.dailyKcal).toBeCloseTo(0.15, 1);
+    expect((r.proteinG * 4) / r.dailyKcal).toBeCloseTo(0.4, 1);
+    expect((r.fatG * 9) / r.dailyKcal).toBeCloseTo(0.45, 1);
+  });
 });

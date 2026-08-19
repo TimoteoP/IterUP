@@ -184,7 +184,12 @@ Dettagli importanti che si discostano da un modello "naive":
   (dimagrimento/mantenimento/costruzione_muscolare/recupero), scelta direttamente
   dall'utente — non derivata dal delta peso/obiettivo.
 - **`profiles.dietary_regime`** è testo libero (nessun `CHECK` in DB): i preset noti
-  vivono solo in `lib/nutrition-options.ts`, l'utente può aggiungerne di nuovi da UI.
+  (con split macro fisso, es. Keto 10/35/55) vivono solo in `lib/nutrition-options.ts`,
+  l'utente può aggiungerne di nuovi da UI. Un regime **non** tra i preset usa uno split
+  generico 45% carbo/30% proteine/25% grassi, a meno che l'utente non ne definisca uno
+  suo in `profiles.custom_macro_split` (jsonb `{carbPct,proteinPct,fatPct}`, somma 100,
+  validato da `isValidMacroSplit` sia client che server) — vedi il form in
+  `app/impostazioni/ProfileForm.tsx`, visibile solo quando il regime attivo è custom.
 - **`body_metrics`** ha sia i campi "Misure" (peso, collo, petto, vita, coscia) sia i
   campi "Bussola" (fianchi, polso, kcal periodo, percezione soggettiva collo/polso,
   `sex_at_checkin` — snapshot del sesso al momento del check-in). L'upsert è
@@ -215,6 +220,7 @@ cambia. Riepilogo di cosa introduce ciascuna migrazione:
 | `006-trgm` | Estensione `pg_trgm` + funzione `search_foods_trgm` |
 | `007-supplement-chat` | Tabella `supplement_chat_messages` |
 | `008-coach` | Tabelle `coach_nudges`, `coach_preferences`, `daily_focus`, `journal_entries` |
+| `009-custom-macro-split` | Campo `profiles.custom_macro_split`, split macro personalizzato per regimi custom |
 
 ## 1.8 Documenti di riferimento
 
@@ -309,6 +315,13 @@ IterUp calcola subito il tuo fabbisogno calorico e i tuoi target di macronutrien
 
 Questi dati **non sono definitivi**: puoi tornare in Impostazioni in qualsiasi momento
 per aggiornarli (es. dopo aver perso peso, o se cambi obiettivo).
+
+Se scegli uno dei regimi alimentari già noti (mediterraneo, keto, paleo, vegano...),
+IterUp divide le tue calorie in carbo/proteine/grassi con le percentuali giuste per
+quello stile alimentare. Se invece scrivi un regime tuo personalizzato con "+ Aggiungi
+nuovo regime...", compare un campo per specificare tu le percentuali (devono sommare a
+100%); se lo lasci vuoto, IterUp usa un mix generico bilanciato — che potrebbe non avere
+senso per un regime molto sbilanciato (es. chetogenico) se non lo specifichi tu.
 
 ## 2.3 Home (dashboard)
 

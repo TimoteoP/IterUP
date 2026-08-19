@@ -24,7 +24,7 @@
 // dall'utente — non ancora implementato, fuori scope di questa fase.
 // ============================================================
 
-import { macroSplitForRegime, type DietMode, type DietaryRegime } from "./nutrition-options";
+import { macroSplitForRegime, type DietMode, type DietaryRegime, type MacroSplit } from "./nutrition-options";
 
 export type Sex = "m" | "f";
 
@@ -45,6 +45,8 @@ export interface TDEEInput {
   activityLevel: ActivityLevel;
   mode: GoalMode;
   dietaryRegime: DietaryRegime;
+  /** Split macro scelto dall'utente per un regime non tra i preset noti (vedi macroSplitForRegime). */
+  customMacroSplit?: MacroSplit | null;
 }
 
 export interface TDEEResult {
@@ -117,14 +119,14 @@ export function calculateMaintenanceTDEE(
  * nessun accesso a DB/rete, facilmente testabile.
  */
 export function calculateTDEE(input: TDEEInput): TDEEResult {
-  const { sex, weightKg, heightCm, age, activityLevel, mode, dietaryRegime } = input;
+  const { sex, weightKg, heightCm, age, activityLevel, mode, dietaryRegime, customMacroSplit } = input;
 
   const bmr = calculateBMR(sex, weightKg, heightCm, age);
   const tdee = bmr * ACTIVITY_MULTIPLIERS[activityLevel];
 
   const dailyKcal = Math.round(tdee * (1 + MODE_KCAL_ADJUSTMENT[mode]));
 
-  const split = macroSplitForRegime(dietaryRegime);
+  const split = macroSplitForRegime(dietaryRegime, customMacroSplit);
   const proteinG = Math.round((dailyKcal * (split.proteinPct / 100)) / KCAL_PER_G_PROTEIN);
   const fatG = Math.round((dailyKcal * (split.fatPct / 100)) / KCAL_PER_G_FAT);
   const carbsG = Math.round((dailyKcal * (split.carbPct / 100)) / KCAL_PER_G_CARBS);
