@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
 const REACTIONS = ["like", "dislike", "dismissed"] as const;
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const body = await request.json().catch(() => null);

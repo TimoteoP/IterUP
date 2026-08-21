@@ -31,7 +31,7 @@ import type { Json } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const [profileResult, weightResult, targetResult] = await Promise.all([
@@ -190,7 +190,7 @@ function validatePayload(body: unknown): { data: ProfilePayload } | { error: str
 }
 
 export async function POST(request: Request) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   let rawBody: unknown;

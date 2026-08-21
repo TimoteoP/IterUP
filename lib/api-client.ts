@@ -1,19 +1,19 @@
 // ============================================================
-// IterUp — fetch con token per le API route di scrittura
+// IterUp — fetch per le API route
 // ------------------------------------------------------------
-// Allega automaticamente l'header x-api-token (verificato da
-// lib/api-auth.ts) a ogni chiamata di scrittura. Usare al posto di
-// fetch() nudo per POST/PATCH/DELETE verso /api/**; le GET restano
-// fetch() normale, non richiedono il token.
+// Prima allegava manualmente un header x-api-token letto da
+// NEXT_PUBLIC_API_WRITE_TOKEN — variabile pubblica, quindi finiva nel
+// bundle JS servito al browser: chiunque ispezionasse il sito
+// deployato poteva copiare il token e chiamare le API di scrittura
+// direttamente, bypassando l'app (falla corretta con l'introduzione
+// del login, vedi middleware.ts e lib/session.ts).
+//
+// L'autenticazione ora passa da un cookie di sessione httpOnly, che
+// il browser allega da solo ad ogni richiesta same-origin: non serve
+// più fare nulla qui. La funzione resta solo per non dover toccare
+// ogni componente che la usa già al posto di fetch() nudo.
 // ============================================================
 
 export function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
-  const token = process.env.NEXT_PUBLIC_API_WRITE_TOKEN;
-  return fetch(input, {
-    ...init,
-    headers: {
-      ...(init.headers ?? {}),
-      ...(token ? { "x-api-token": token } : {}),
-    },
-  });
+  return fetch(input, init);
 }

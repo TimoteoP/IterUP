@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
-import { requireApiAuth } from "@/lib/api-auth";
+import { requireShortcutAuth } from "@/lib/api-auth";
 import { enrichGoalsWithProgress } from "@/lib/goal-progress";
 import { generateEveningMessage } from "@/lib/coach-messages";
 import type { Tables } from "@/lib/types";
@@ -70,7 +70,7 @@ function buildSummaryText(params: {
 }
 
 export async function GET(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = requireShortcutAuth(request);
   if (authError) return authError;
 
   const today = todayIso();

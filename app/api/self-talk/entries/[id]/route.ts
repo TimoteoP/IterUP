@@ -15,7 +15,7 @@ import { requireApiAuth } from "@/lib/api-auth";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const { data: entry, error } = await supabaseServer
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const body = await request.json().catch(() => null);

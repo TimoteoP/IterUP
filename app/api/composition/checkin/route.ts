@@ -35,7 +35,7 @@ function isFeelValue(v: unknown): v is -1 | 0 | 1 {
 }
 
 export async function POST(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const body = await request.json().catch(() => null);

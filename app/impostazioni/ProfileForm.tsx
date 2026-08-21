@@ -127,6 +127,7 @@ export default function ProfileForm({
   const [form, setForm] = useState<ProfileFormState>(initialValues ?? PROFILE_FORM_INITIAL_STATE);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const [addingRegime, setAddingRegime] = useState(false);
   const [customRegimeDraft, setCustomRegimeDraft] = useState("");
 
@@ -142,6 +143,7 @@ export default function ProfileForm({
 
   function update<K extends keyof ProfileFormState>(key: K, value: ProfileFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
+    setJustSaved(false);
   }
 
   const splitSum =
@@ -157,6 +159,7 @@ export default function ProfileForm({
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    setJustSaved(false);
 
     const validationError = validate(form);
     if (validationError) {
@@ -193,13 +196,19 @@ export default function ProfileForm({
       const json = await res.json();
       if (!res.ok) {
         setError(json.error ?? "Errore durante il salvataggio.");
-        setSubmitting(false);
         return;
       }
 
+      // Il salvataggio è confermato SOLO qui, dopo la risposta 2xx dal
+      // server — mai in modo ottimistico prima di sapere l'esito.
+      setJustSaved(true);
       onSuccess();
     } catch {
       setError("Errore di rete durante il salvataggio. Riprova.");
+    } finally {
+      // Bug corretto: prima questa riga mancava sul percorso di
+      // successo, quindi il bottone restava bloccato su "Salvataggio…"
+      // anche a salvataggio riuscito (mai un `return` prima di qui).
       setSubmitting(false);
     }
   }
@@ -539,23 +548,30 @@ export default function ProfileForm({
         </div>
       )}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        style={{
-          backgroundColor: colors.primary,
-          color: colors.background,
-          border: "none",
-          borderRadius: radius.md,
-          padding: `${spacing.sm} ${spacing.md}`,
-          fontSize: font.size.md,
-          fontWeight: font.weight.semibold,
-          cursor: submitting ? "not-allowed" : "pointer",
-          opacity: submitting ? 0.7 : 1,
-        }}
-      >
-        {submitting ? submittingLabel : submitLabel}
-      </button>
+      <div className="flex items-center" style={{ gap: spacing.sm }}>
+        <button
+          type="submit"
+          disabled={submitting}
+          style={{
+            backgroundColor: colors.primary,
+            color: colors.background,
+            border: "none",
+            borderRadius: radius.md,
+            padding: `${spacing.sm} ${spacing.md}`,
+            fontSize: font.size.md,
+            fontWeight: font.weight.semibold,
+            cursor: submitting ? "not-allowed" : "pointer",
+            opacity: submitting ? 0.7 : 1,
+          }}
+        >
+          {submitting ? submittingLabel : submitLabel}
+        </button>
+        {justSaved && !submitting && (
+          <span style={{ color: colors.primary, fontSize: font.size.sm, fontWeight: font.weight.medium }}>
+            Salvato ✓
+          </span>
+        )}
+      </div>
     </form>
   );
 }

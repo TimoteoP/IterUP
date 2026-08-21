@@ -24,7 +24,7 @@ const DEFAULT_LIMIT = 30;
 const RAW_TEXT_MAX_LENGTH = 4000;
 
 export async function GET(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const limitParam = request.nextUrl.searchParams.get("limit");
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const body = await request.json().catch(() => null);

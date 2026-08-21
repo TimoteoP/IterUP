@@ -21,7 +21,7 @@ import { evaluateAfterBodyMetricsWrite } from "@/lib/coach-evaluators";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const { data, error } = await supabaseServer
@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   let body: BodyMetricsPayload;

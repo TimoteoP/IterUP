@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 const DEFAULT_LIMIT = 10;
 
 export async function GET(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const { data, error } = await supabaseServer

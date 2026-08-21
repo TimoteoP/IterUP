@@ -16,7 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { CURRENT_USER_ID } from "@/lib/config";
-import { requireApiAuth } from "@/lib/api-auth";
+import { requireShortcutAuth } from "@/lib/api-auth";
 import { calculateStreak } from "@/lib/streak";
 import { generateMorningReflection } from "@/lib/coach-messages";
 
@@ -35,7 +35,7 @@ function addDaysIso(iso: string, delta: number): string {
 }
 
 export async function GET(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = requireShortcutAuth(request);
   if (authError) return authError;
 
   const today = todayIso();

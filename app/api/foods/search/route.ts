@@ -37,7 +37,7 @@ async function searchTrigram(q: string, limit: number) {
 }
 
 export async function GET(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const searchParams = request.nextUrl.searchParams;

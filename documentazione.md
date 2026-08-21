@@ -17,20 +17,23 @@ Questo documento è diviso in due parti:
 
 - **Next.js 14** (App Router), **TypeScript** strict, **Tailwind CSS**
 - **Supabase** (solo Postgres — nessun uso di Supabase Auth)
+- **iron-session** per il cookie di sessione del login (vedi 1.2.1) — unica dipendenza di
+  autenticazione, nessun provider esterno
 - **OpenRouter** come gateway AI per il generatore di pasti (nessuna chiamata diretta a
   OpenAI/Anthropic/Google)
 - Deploy previsto su **Vercel**
 - Nessuna libreria di UI/charting esterna: tutti i grafici sono SVG scritti a mano
   (vedi `app/_dashboard/TrendChart.tsx`, `app/misure/bussola/CompositionTrendChart.tsx`)
 
-## 1.2 Decisione architetturale fondamentale: niente login
+## 1.2 Decisione architetturale fondamentale: un solo utente, un solo login
 
-IterUp **non ha autenticazione**. È un'app a singolo utente:
+IterUp è **a singolo utente**, non multi-account: nessun signup, nessun ruolo, nessuna
+gestione di più profili.
 
 - Un solo record in `auth.users`, il cui `id` è hardcoded in `.env.local` come
   `CURRENT_USER_ID` e riesportato da `lib/config.ts`.
 - **Ogni** query, in **ogni** API route, filtra esplicitamente `.eq("user_id", CURRENT_USER_ID)`
-  invece di appoggiarsi a `auth.uid()` o a una sessione.
+  invece di appoggiarsi a `auth.uid()` o a Supabase Auth.
 - Le API route usano `lib/supabase/server.ts`, un client Supabase con la **service role
   key**, che bypassa le Row Level Security policy. Le RLS policy in `schema.sql` esistono
   comunque come difesa in profondità, nel caso in futuro si introduca un client anon
@@ -41,38 +44,62 @@ IterUp **non ha autenticazione**. È un'app a singolo utente:
 Se in futuro serve un vero sistema multi-utente, è un cambio isolato a
 `lib/config.ts`/`lib/supabase/server.ts`, non tocca i moduli funzionali.
 
-### 1.2.1 Protezione delle API route (token condiviso)
+### 1.2.1 Login a password singola (cookie di sessione httpOnly)
 
-"Niente login" non significava "nessun controllo": fino a un certo punto del progetto,
-**ogni** API route era raggiungibile da chiunque conoscesse l'URL dell'app deployata,
-perché ogni route usa la service role key server-side a prescindere da chi ha fatto la
-richiesta. Le Row Level Security policy in `schema.sql` **non aiutano qui**: sono legate
-al ruolo Postgres della connessione, e la service role bypassa le RLS per design — quindi
-sono difesa in profondità solo per lo scenario (oggi non presente) in cui un client
-browser usasse la anon key direttamente contro Supabase, non per il traffico reale
-dell'app, che passa sempre dalle API route.
+Prima dell'introduzione del login, la protezione delle API route era un token condiviso
+allegato lato client — e quel token viveva (anche) in `NEXT_PUBLIC_API_WRITE_TOKEN`, quindi
+**finiva nel bundle JavaScript pubblico**: chiunque ispezionasse il sito deployato poteva
+copiarlo e chiamare le API di scrittura direttamente, bypassando l'app. Falla reale,
+corretta sostituendo il meccanismo con un login vero, ma volutamente minimo: **una sola
+password condivisa**, nessun account/username, coerente con "singolo utente" (vedi 1.2) —
+non è un'eccezione alla filosofia del progetto, è un cancello univoco davanti all'app.
 
-La protezione reale è `lib/api-auth.ts`: ogni API route (lettura e scrittura) chiama
-`requireApiAuth(request)` e risponde `401` senza un token valido, letto da header
-`x-api-token` o query param `?token=`. Il client (l'app stessa) allega il token
-automaticamente tramite `lib/api-client.ts` (`apiFetch`, da usare al posto di `fetch()`
-nudo per ogni chiamata verso `/api/**`). Il token vive in due variabili d'ambiente con lo
-stesso valore — `API_WRITE_SECRET` (letta solo server-side) e
-`NEXT_PUBLIC_API_WRITE_TOKEN` (nel bundle client, perché il client deve poterlo allegare)
-— quindi non è un segreto crittografico forte (visibile a chi ispetta la scheda Network),
-ma alza l'asticella da "chiunque conosca l'URL" a "chiunque ispezioni il traffico", nello
-stesso spirito del webhook `ACTIVITY_WEBHOOK_SECRET` già esistente per gli Shortcuts iOS.
+**Come funziona**:
+- `lib/session-config.ts` — configurazione condivisa (nome cookie, TTL 30 giorni, opzioni)
+  **senza import di `next/headers`**: deve restare importabile da `middleware.ts`, che gira
+  su Edge runtime e non supporta `next/headers`.
+- `lib/session.ts` — `getSession()` per Route Handler/Server Component, usa
+  `next/headers` + `iron-session` (`getIronSession`).
+- `middleware.ts` — gira su **ogni** richiesta (pagine e API) tranne le eccezioni sotto:
+  legge il cookie con `unsealData` di `iron-session` (non `getIronSession`, pensata per
+  Route Handler, non per l'Edge runtime di un middleware), verifica `isLoggedIn`. Senza
+  sessione valida: redirect a `/login` per le pagine, `401` JSON per le API.
+- `app/login/page.tsx` + `app/api/login/route.ts` — form con solo la password, confronto
+  a tempo costante (`crypto.timingSafeEqual`, non `===`) contro `APP_PASSWORD`, poi
+  `session.save()` imposta il cookie httpOnly (**mai leggibile da JavaScript lato
+  client**, a differenza del vecchio token).
+- `app/api/logout/route.ts` — `session.destroy()`.
+- `lib/api-auth.ts` — **due** guardie distinte, per due tipi di chiamante:
+  - `requireApiAuth(request)`: per le route chiamate dal browser. Verifica lo stesso
+    cookie di sessione (il middleware l'ha già verificato prima — questo è un secondo
+    livello di difesa in profondità sulla singola route, non l'unico controllo).
+    **Asincrona**: la verifica crittografica non può essere sincrona, a differenza del
+    vecchio controllo a token statico — ogni route che la chiama fa
+    `await requireApiAuth(request)`.
+  - `requireShortcutAuth(request)`: per le route che **non possono mai avere un cookie di
+    sessione** perché non sono chiamate da un browser ma da uno Shortcut iOS pianificato —
+    resta il vecchio meccanismo a token (header `x-api-token` o `?token=`) contro
+    `API_WRITE_SECRET`, che è **sempre stata** server-only (mai avuto il prefisso
+    `NEXT_PUBLIC_`, quindi non c'entra con la falla corretta qui). Usata solo da
+    `GET /api/coach/morning` e `GET /api/coach/evening`.
+- `lib/api-client.ts` (`apiFetch`) — non allega più nulla: il cookie viaggia da solo con
+  ogni richiesta same-origin del browser. La funzione resta solo per non dover toccare
+  ogni componente che già la usa al posto di `fetch()` nudo.
 
-Due eccezioni deliberate, senza token:
+**Tre eccezioni al gate del middleware**, tutte per chiamanti che non sono mai un browser:
 
-- `POST /api/activity/ingest` — protetta da un secret **diverso** (`ACTIVITY_WEBHOOK_SECRET`),
-  perché è chiamata da uno Shortcut iOS esterno, non dal client dell'app.
-- `GET /api/reminders/status` — nessun token: pensata per essere interrogata da uno
-  Shortcut iOS pianificato, e il payload non contiene mai dati personali (solo booleani
-  "manca X oggi?").
+- `POST /api/activity/ingest` — secret **dedicato** (`ACTIVITY_WEBHOOK_SECRET`), gestito
+  internamente alla route, invariato da questa modifica.
+- `GET /api/coach/morning`, `GET /api/coach/evening` — `requireShortcutAuth` (sopra).
+- `GET /api/reminders/status` — nessun token: il payload non contiene mai dati personali
+  (solo booleani "manca X oggi?").
 
-Protezione reale aggiuntiva prevista ma non ancora attiva: **Vercel Deployment
-Protection**, una volta fatto il deploy.
+Più `/login` e `/api/login` stesse, ovviamente — altrimenti nessuno potrebbe più
+autenticarsi.
+
+Protezione aggiuntiva prevista ma non ancora attiva: **Vercel Deployment Protection**,
+una volta fatto il deploy — un livello in più (a monte dell'app), non un sostituto del
+login applicativo.
 
 ## 1.3 Struttura del repository
 
@@ -89,10 +116,12 @@ app/
   obiettivi/                  CRUD obiettivi generalizzati
   attivita/                   Attività fisica (passi + allenamenti)
   impostazioni/                Profilo (anche primo avvio) + integratori/chat + backup + preferenze coach
+  login/                       Pagina di login (unica route pubblica insieme a /api/login)
   api/                        Tutte le API route server-side (vedi 1.5)
 components/
   nav/                        Navigazione (bottom nav mobile / sidebar desktop)
 lib/                          Logica condivisa, vedi 1.4
+middleware.ts                 Gate di autenticazione su ogni richiesta, vedi 1.2.1
 public/                       manifest.json, service worker, icone PWA
 schema.sql                    Schema DB canonico (stato TARGET, non applicato in automatico)
 schema-migration-*.sql        Migrazioni incrementali, da eseguire a mano su Supabase
@@ -114,8 +143,10 @@ CLAUDE.md                     Regole operative per lavorare sul progetto con Cla
 | `composition.ts` | Formule della Bussola di Ricomposizione (BF% Navy, FM/FFM, bilancio energetico, Indice di Ricomposizione, logica di direzione) |
 | `body-metrics-store.ts` | Upsert "merge-aware" su `body_metrics`, condivisa tra modulo Misure e Bussola |
 | `openrouter.ts` | Client OpenRouter condiviso (fallback esplicito tra modelli, mai auto-router). `callOpenRouterJSON` ritenta anche su fallimento della chiamata stessa, non solo su JSON malformato (vedi 1.12) |
-| `api-auth.ts` | `requireApiAuth(request)` — guardia token per ogni API route, vedi 1.2.1 |
-| `api-client.ts` | `apiFetch()` — wrapper client che allega il token, da usare al posto di `fetch()` nudo |
+| `api-auth.ts` | `requireApiAuth` (cookie di sessione, browser) e `requireShortcutAuth` (token, Shortcut iOS) — vedi 1.2.1 |
+| `api-client.ts` | `apiFetch()` — wrapper client, oggi un passthrough a `fetch()` (il cookie viaggia da solo) |
+| `session-config.ts` | Config sessione condivisa, Edge-safe (nessun `next/headers`) — usata anche da `middleware.ts` |
+| `session.ts` | `getSession()` per Route Handler/Server Component (usa `next/headers` + iron-session) |
 | `streak.ts` | Calcolo streak (giorni consecutivi completati), condiviso tra dashboard e obiettivi |
 | `goal-progress.ts` | `current_value`/`progress_pct` degli obiettivi, calcolati a runtime dai dati reali, mai persistiti |
 | `offline-queue.ts` | Coda IndexedDB per i log del diario quando manca rete (retry automatico al ritorno online) |
@@ -133,11 +164,12 @@ superficie di contatto tra i moduli (vedi `CLAUDE.md`).
 
 ## 1.5 API route (convenzione: `app/api/<modulo>/<azione>/route.ts`)
 
-Tutte le route sotto `/api/**` richiedono il token condiviso (vedi 1.2.1), tranne le due
-eccezioni deliberate segnalate lì.
+Tutte le route sotto `/api/**` richiedono una sessione valida (cookie, verificato dal
+middleware + di nuovo da ogni singola route), tranne le eccezioni elencate in 1.2.1.
 
 | Modulo | Route | Note |
 |---|---|---|
+| Login | `POST /api/login`, `POST /api/logout` | Le uniche due route pubbliche insieme a `/login` stessa — vedi 1.2.1 |
 | Profilo | `GET/POST /api/profile` | Legge/salva profilo, ricalcola TDEE e target ad ogni salvataggio |
 | Diario | `GET /api/foods/search`, `POST /api/foods`, `GET /api/foods/search-external` | Ricerca full-text → ilike → trigram (typo-tolerante); import da Open Food Facts su richiesta esplicita |
 | Diario | `GET/POST /api/logs`, `DELETE /api/logs/[id]`, `GET /api/logs/summary` | CRUD log pasti, riepilogo macro giornaliero, guardrail soft su quantità/kcal anomale |
@@ -266,8 +298,9 @@ cambia. Riepilogo di cosa introduce ciascuna migrazione:
 | `CURRENT_USER_ID` | UUID dell'unico utente dell'app |
 | `ACTIVITY_WEBHOOK_SECRET` | Shared secret per il webhook Shortcuts iOS (`/api/activity/ingest`) |
 | `OPENROUTER_API_KEY` | Chiave OpenRouter per generatore pasti, chat integratori, coach |
-| `API_WRITE_SECRET` | Token di protezione delle API route, letto solo server-side (vedi 1.2.1) |
-| `NEXT_PUBLIC_API_WRITE_TOKEN` | Stesso valore di `API_WRITE_SECRET`, nel bundle client perché il client deve allegarlo |
+| `API_WRITE_SECRET` | Solo per le route chiamate da Shortcut iOS (`requireShortcutAuth`), mai avuto il prefisso `NEXT_PUBLIC_` (vedi 1.2.1) |
+| `APP_PASSWORD` | Password dell'unico login dell'app — sceglila tu, non generarla casuale |
+| `SESSION_SECRET` | Chiave di firma/cifratura del cookie di sessione (iron-session), stringa casuale ≥32 caratteri |
 
 ## 1.10 Sviluppo locale
 
@@ -386,7 +419,9 @@ e corretto due bug reali, non specifici solo a questo modulo:
 
 IterUp è la tua app personale per tenere sotto controllo dieta, peso, attività fisica e
 abitudini in un unico posto, senza dover usare quattro app diverse e senza dover creare
-un account: è già impostata per te.
+un account: è già impostata per te. L'unica cosa che ti viene chiesta è una password
+(quella che hai scelto tu) al primo accesso da ogni dispositivo — dopo resti connesso
+per 30 giorni, anche riavviando l'app.
 
 ## 2.2 Primo avvio
 

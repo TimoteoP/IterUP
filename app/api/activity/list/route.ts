@@ -15,7 +15,7 @@ import { requireApiAuth } from "@/lib/api-auth";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const limitParam = request.nextUrl.searchParams.get("limit");

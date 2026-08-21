@@ -2,8 +2,13 @@
 // IterUp — POST /api/suggest-meal (A3, Generatore Pasti AI)
 // ------------------------------------------------------------
 // Vedi PRD-addendum-openrouter.md sezioni 6-8 per modelli, schema
-// JSON e system prompt: NON modificare quelle scelte da qui, sono
-// decisioni di prodotto prese esplicitamente dall'utente.
+// JSON e contenuto del prompt: NON modificare quelle scelte da qui,
+// sono decisioni di prodotto prese esplicitamente dall'utente. La
+// SUDDIVISIONE system/user (non il contenuto) è stata corretta: un
+// prompt system-only in jsonMode causava fallimenti riproducibili
+// ("risposta senza content") con deepseek-v4-flash-0731, stesso bug
+// trovato e corretto in lib/coach-messages.ts e
+// lib/self-talk-messages.ts.
 //
 // Body: { mealType: "colazione"|"pranzo"|"cena"|"spuntino" }
 // Tutto il resto (regime, allergie, preferenze, target macro) viene
@@ -75,7 +80,32 @@ export interface ValidatedProposal {
   note_regime?: string;
 }
 
-function buildSystemPrompt(params: {
+// Divisi in system (regole/schema, stabili) + user (dati della
+// richiesta specifica) — NON un cambio di contenuto/istruzioni (che
+// restano quelle esatte di PRD-addendum-openrouter.md sezioni 6-8),
+// solo di struttura dei ruoli. Un system-only in jsonMode ha causato
+// fallimenti riproducibili ("risposta senza content") con
+// deepseek-v4-flash-0731, verificato in isolamento contro l'API
+// OpenRouter — stesso fix già applicato a lib/coach-messages.ts e
+// lib/self-talk-messages.ts.
+function buildSystemPrompt(): string {
+  return `Sei un assistente nutrizionale. Genera esattamente 5 proposte di pasto che rispettino rigorosamente i vincoli indicati, restituendo SOLO un oggetto JSON conforme allo schema fornito, senza testo aggiuntivo prima o dopo.
+
+REGOLE:
+1. Rispetta sempre le allergie elencate: non proporre mai un ingrediente presente in quella lista, nemmeno in tracce.
+2. Rispetta i vincoli del regime alimentare selezionato (es. keto = carboidrati bassi).
+3. Avvicinati il più possibile ai target macro indicati, con una tolleranza del 10%.
+4. Tieni conto delle preferenze alimentari per aumentare la probabilità che il pasto piaccia, ma non è un vincolo assoluto come le allergie.
+5. Varia gli ingredienti tra le 5 proposte: evita di riproporre la stessa combinazione con piccole variazioni.
+6. Usa solo alimenti dalla lista fornita, con il nome esatto indicato.
+
+Schema JSON atteso:
+{"proposte":[{"nome":"string","descrizione":"string (max 2 frasi)","ingredienti":[{"alimento":"string (nome esatto dalla lista)","quantita_g":number}],"macro":{"kcal":number,"proteine_g":number,"carboidrati_g":number,"grassi_g":number},"tipo_pasto":"string","note_regime":"string (opzionale)"}]}
+
+Rispondi SOLO con il JSON conforme allo schema, nessun altro testo.`;
+}
+
+function buildUserPrompt(params: {
   modeLabel: string;
   regimeLabel: string;
   targetKcal: number;
@@ -100,9 +130,7 @@ function buildSystemPrompt(params: {
     foodsList,
   } = params;
 
-  return `Sei un assistente nutrizionale. Genera esattamente 5 proposte di pasto che rispettino rigorosamente i vincoli indicati, restituendo SOLO un oggetto JSON conforme allo schema fornito, senza testo aggiuntivo prima o dopo.
-
-DATI UTENTE:
+  return `DATI UTENTE:
 - Obiettivo dieta: ${modeLabel}
 - Regime alimentare: ${regimeLabel}
 - Target per questo pasto: ${targetKcal} kcal, ${targetProtein}g proteine, ${targetCarbs}g carboidrati, ${targetFat}g grassi
@@ -111,24 +139,11 @@ DATI UTENTE:
 - Preferenze alimentari (da massimizzare quando possibile, non vincolante): ${preferences.length ? preferences.join(", ") : "nessuna"}
 
 ALIMENTI DISPONIBILI (usa SOLO questi, con questi nomi esatti):
-${foodsList}
-
-REGOLE:
-1. Rispetta sempre le allergie elencate: non proporre mai un ingrediente presente in quella lista, nemmeno in tracce.
-2. Rispetta i vincoli del regime alimentare selezionato (es. keto = carboidrati bassi).
-3. Avvicinati il più possibile ai target macro indicati, con una tolleranza del 10%.
-4. Tieni conto delle preferenze alimentari per aumentare la probabilità che il pasto piaccia, ma non è un vincolo assoluto come le allergie.
-5. Varia gli ingredienti tra le 5 proposte: evita di riproporre la stessa combinazione con piccole variazioni.
-6. Usa solo alimenti dalla lista fornita, con il nome esatto indicato.
-
-Schema JSON atteso:
-{"proposte":[{"nome":"string","descrizione":"string (max 2 frasi)","ingredienti":[{"alimento":"string (nome esatto dalla lista)","quantita_g":number}],"macro":{"kcal":number,"proteine_g":number,"carboidrati_g":number,"grassi_g":number},"tipo_pasto":"string","note_regime":"string (opzionale)"}]}
-
-Rispondi SOLO con il JSON conforme allo schema, nessun altro testo.`;
+${foodsList}`;
 }
 
 export async function POST(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   let body: unknown;
@@ -201,7 +216,8 @@ export async function POST(request: NextRequest) {
   const foodsByName = new Map(foods.map((f) => [f.name.trim().toLowerCase(), f]));
   const foodsList = foods.map((f) => `- ${f.name} (${f.kcal_100g} kcal/100g)`).join("\n");
 
-  const systemPrompt = buildSystemPrompt({
+  const systemPrompt = buildSystemPrompt();
+  const userPrompt = buildUserPrompt({
     modeLabel,
     regimeLabel,
     targetKcal,
@@ -219,7 +235,10 @@ export async function POST(request: NextRequest) {
   try {
     const result = await callOpenRouterJSON<RawResponse>({
       models: MODELS,
-      messages: [{ role: "system", content: systemPrompt }],
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
     });
     raw = result.data;
     modelUsed = result.log.modelUsed;

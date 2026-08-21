@@ -17,10 +17,18 @@ Uso personale, single-user, MVP.
    invece di ricostruire lo schema dalla descrizione a parole nel PRD — la descrizione a
    parole non è precisa quanto le colonne reali (es. `user_targets.mode`, i campi esatti
    di `body_metrics`), e uno schema reinventato non corrisponde al database vero.
-1. **Niente login/auth.** Un solo utente fisso (vedi `/lib/config.ts` → `CURRENT_USER_ID`).
-   Tutte le query passano dalle API route server-side con la service role key. Non creare
-   MAI form di login, signup, reset password, o gestione sessione — è una scelta esplicita
-   documentata in PRD.md sezione 3bis, non una dimenticanza.
+1. **Un solo utente fisso** (vedi `/lib/config.ts` → `CURRENT_USER_ID`). Tutte le query
+   passano dalle API route server-side con la service role key. **Niente account/multi-utente/
+   ruoli** — resta una scelta esplicita, documentata in PRD.md sezione 3bis: non aggiungere
+   signup, reset password, o gestione di più utenti.
+   **Eccezione deliberata**: l'app HA un login a password singola (`app/login/page.tsx`,
+   `app/api/login/route.ts`, cookie di sessione httpOnly via `lib/session.ts` +
+   `middleware.ts`), aggiunto per chiudere una falla reale (il vecchio meccanismo a token
+   in `NEXT_PUBLIC_API_WRITE_TOKEN` finiva nel bundle client, leggibile da chiunque
+   ispezionasse il sito deployato). Non è in contraddizione con questa regola: è un
+   cancello univoco davanti all'app, non un sistema di account. Le route chiamate da
+   Shortcut iOS (mai un browser) restano escluse dal cookie di sessione e usano un secret
+   dedicato via `requireShortcutAuth` — vedi `lib/api-auth.ts` e `middleware.ts`.
 2. **Non modificare i contratti condivisi** senza autorizzazione esplicita: `/schema.sql`,
    `/lib/types.ts`, `/lib/supabase/server.ts`, `/lib/config.ts`, `/lib/design-tokens.ts`.
    Se un modulo ha bisogno di un campo DB in più, fermati e segnalalo invece di modificare
@@ -71,7 +79,8 @@ successivo.
 
 ## Cosa NON fare
 
-- Non creare schermate di autenticazione (vedi regola 1)
+- Non aggiungere signup, account multipli o ruoli (vedi regola 1) — il login a password
+  singola già presente resta l'unica eccezione voluta
 - Non modificare i contratti condivisi da un agente specializzato
 - Non lanciare A3 o A7 insieme alla Fase 1 — dipendono da moduli non ancora pronti
 - Non esporre la service role key lato client

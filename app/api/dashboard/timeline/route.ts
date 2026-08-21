@@ -45,7 +45,7 @@ function isoRange(startIso: string, endIso: string): string[] {
 }
 
 export async function GET(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const daysParam = Number(request.nextUrl.searchParams.get("days"));

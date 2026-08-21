@@ -1,32 +1,38 @@
 // ============================================================
-// IterUp — guardia di autenticazione per le API route
+// IterUp — guardie di autenticazione per le API route
 // ------------------------------------------------------------
-// Le API route non hanno mai avuto un controllo su chi le chiama
-// (nessun login, vedi CLAUDE.md regola 1): chiunque conoscesse l'URL
-// dell'app deployata poteva leggere/scrivere/cancellare dati via
-// HTTP, dato che ogni route usa la service role key server-side a
-// prescindere dal chiamante. Stesso pattern già in uso per il webhook
-// /api/activity/ingest (ACTIVITY_WEBHOOK_SECRET), esteso qui a tutte
-// le altre route (lettura e scrittura) con un secret condiviso
-// separato: il client (l'app stessa) lo allega via lib/api-client.ts,
-// un chiamante esterno senza il token corretto viene respinto con 401.
+// Due meccanismi distinti per due tipi di chiamante:
 //
-// Eccezione deliberata: /api/reminders/status resta senza token,
-// perché è pensato per essere interrogato da uno Shortcut iOS
-// pianificato (non dal browser) e non espone dati personali (solo
-// booleani "manca X oggi?") — vedi commento nel file stesso.
+// - requireApiAuth: per il client dell'app (browser). Verifica il
+//   cookie di sessione httpOnly impostato al login (vedi
+//   lib/session.ts, app/api/login/route.ts). middleware.ts fa già
+//   questo controllo prima che la richiesta arrivi qui — questo è un
+//   secondo livello di difesa in profondità sulla singola route, non
+//   l'unico controllo. Asincrona: la verifica crittografica del
+//   cookie (iron-session/Web Crypto) non può essere sincrona, a
+//   differenza del vecchio controllo a token statico che sostituisce.
 //
-// Nota: il token è imbustato nel bundle client (NEXT_PUBLIC_...), non
-// è quindi un segreto crittografico forte — è visibile a chi ispeziona
-// la scheda Network. Alza comunque l'asticella da "chiunque conosca
-// l'URL" a "chiunque ispezioni il traffico", nello stesso spirito del
-// webhook già esistente. Protezione reale aggiuntiva: Vercel
-// Deployment Protection una volta fatto il deploy.
+// - requireShortcutAuth: per chiamanti che NON sono mai un browser
+//   (Shortcut iOS pianificati: /api/coach/morning, /api/coach/evening)
+//   e quindi non possono avere un cookie di sessione. Resta il
+//   vecchio meccanismo a token (header x-api-token o query ?token=)
+//   contro un secret server-only — mai esposto al client, mai un
+//   NEXT_PUBLIC_. Stesso pattern già in uso per /api/activity/ingest
+//   (che però ha un secret dedicato, ACTIVITY_WEBHOOK_SECRET, gestito
+//   per conto proprio in quella route).
 // ============================================================
 
 import { NextResponse } from "next/server";
+import { getSession } from "./session";
 
-export function requireApiAuth(request: Request): NextResponse | null {
+export async function requireApiAuth(request: Request): Promise<NextResponse | null> {
+  void request; // presente per uniformità di firma con requireShortcutAuth, non serve qui: la sessione viaggia nel cookie letto via next/headers
+  const session = await getSession();
+  if (session.isLoggedIn === true) return null;
+  return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+}
+
+export function requireShortcutAuth(request: Request): NextResponse | null {
   const secret = process.env.API_WRITE_SECRET;
   const headerToken = request.headers.get("x-api-token");
   const queryToken = new URL(request.url).searchParams.get("token");

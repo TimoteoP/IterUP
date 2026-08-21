@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
+    "iron-session": "^8.0.4",
     "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18"

@@ -35,7 +35,7 @@ const USER_ID_COLUMN: Record<string, string> = {
 };
 
 export async function GET(request: NextRequest) {
-  const authError = requireApiAuth(request);
+  const authError = await requireApiAuth(request);
   if (authError) return authError;
 
   const tableNames = Object.keys(USER_ID_COLUMN) as (keyof typeof USER_ID_COLUMN)[];
