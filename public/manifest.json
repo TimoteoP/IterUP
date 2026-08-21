@@ -9,6 +9,14 @@
   "background_color": "#0B0D10",
   "theme_color": "#0B0D10",
   "lang": "it",
+  "shortcuts": [
+    {
+      "name": "Nuovo pensiero",
+      "short_name": "Pensiero",
+      "description": "Registra rapidamente un pensiero negativo",
+      "url": "/pensieri"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",

@@ -96,19 +96,26 @@ export async function generateNudgeMessage(params: {
 
   const systemPrompt = `${SHARED_CONSTRAINTS}
 
-CONTESTO DEL MESSAGGIO DA SCRIVERE:
-- Trigger rilevato: ${triggerType}
 - ${spec.principle}
 - Indicazione di tono: ${spec.toneHint}
-- Dati grezzi rilevati: ${JSON.stringify(triggerData)}
 - ${toneInstruction}
-- ${goalContext}
 
 Rispondi SOLO con un oggetto JSON: {"message": "il messaggio da mostrare in italiano", "tone_used": "diretto" oppure "riflessivo"}.`;
 
+  const userPrompt = `Trigger rilevato: ${triggerType}
+Dati grezzi rilevati: ${JSON.stringify(triggerData)}
+${goalContext}`;
+
+  // NB: prompt diviso in system+user (non un unico blocco system) —
+  // vedi la stessa nota in lib/self-talk-messages.ts (proposeReframe):
+  // un system-only in jsonMode ha causato fallimenti riproducibili
+  // ("risposta senza content") con almeno un modello della catena.
   const { data } = await callOpenRouterJSON<RawNudgeResponse>({
     models: MODELS,
-    messages: [{ role: "system", content: systemPrompt }],
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt },
+    ],
     temperature: 0.7,
   });
 

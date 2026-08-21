@@ -149,7 +149,12 @@ export async function callOpenRouter(options: OpenRouterCallOptions): Promise<Op
 /**
  * Come callOpenRouter, ma forza jsonMode e fa il parse del content,
  * con fino a 2 retry se il JSON risulta non valido (vedi
- * PRD-addendum-openrouter.md sezione 5).
+ * PRD-addendum-openrouter.md sezione 5). I retry coprono anche un
+ * fallimento della chiamata stessa (es. risposta senza `content`,
+ * capitato osservabilmente con alcuni modelli in jsonMode), non solo
+ * un JSON malformato: un errore di rete/risposta vuota è transiente
+ * quanto un JSON non valido, non ha senso propagarlo subito al primo
+ * tentativo mentre l'altro caso viene ritentato.
  */
 export async function callOpenRouterJSON<T>(
   options: Omit<OpenRouterCallOptions, "jsonMode">,
@@ -158,16 +163,15 @@ export async function callOpenRouterJSON<T>(
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const result = await callOpenRouter({ ...options, jsonMode: true });
     try {
+      const result = await callOpenRouter({ ...options, jsonMode: true });
       const data = JSON.parse(result.content) as T;
       return { data, log: result.log };
     } catch (err) {
       lastError = err;
-      const log: OpenRouterCallLog = { ...result.log, outcome: "parse_error" };
-      console.error("OpenRouter JSON parse failed", log, result.content);
+      console.error("OpenRouter JSON call/parse failed", { attempt, error: err instanceof Error ? err.message : err });
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error("Parsing JSON fallito dopo i retry");
+  throw lastError instanceof Error ? lastError : new Error("Chiamata JSON fallita dopo i retry");
 }

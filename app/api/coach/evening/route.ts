@@ -36,8 +36,10 @@ function buildSummaryText(params: {
   workoutMinutes: number;
   goals: { title: string; progress_pct: number | null }[];
   journalContent: string | null;
+  unworkedThoughtsCount: number;
 }): string {
-  const { consumedKcal, targetKcal, weightToday, habitsTotal, habitsCompleted, workoutMinutes, goals, journalContent } = params;
+  const { consumedKcal, targetKcal, weightToday, habitsTotal, habitsCompleted, workoutMinutes, goals, journalContent, unworkedThoughtsCount } =
+    params;
 
   const lines = [
     `Calorie di oggi: ${Math.round(consumedKcal)} kcal${targetKcal ? ` (target ${Math.round(targetKcal)} kcal)` : ""}.`,
@@ -58,6 +60,12 @@ function buildSummaryText(params: {
     lines.push("L'utente non ha scritto note personali oggi.");
   }
 
+  if (unworkedThoughtsCount > 0) {
+    lines.push(
+      `Oggi l'utente ha registrato ${unworkedThoughtsCount} pensiero${unworkedThoughtsCount === 1 ? "" : "i"} nel modulo Pensieri senza ancora lavorarci sopra. Se ci sta, puoi chiudere il messaggio con un invito gentile e non obbligatorio a dargli un'occhiata prima di dormire — mai una richiesta insistente.`
+    );
+  }
+
   return lines.join("\n");
 }
 
@@ -67,7 +75,7 @@ export async function GET(request: NextRequest) {
 
   const today = todayIso();
 
-  const [logsResult, targetResult, weightResult, habitsResult, habitLogsResult, activityResult, goalsResult, journalResult] =
+  const [logsResult, targetResult, weightResult, habitsResult, habitLogsResult, activityResult, goalsResult, journalResult, unworkedThoughtsResult] =
     await Promise.all([
       supabaseServer.from("daily_logs").select("kcal").eq("user_id", CURRENT_USER_ID).eq("logged_at", today),
       supabaseServer
@@ -84,6 +92,16 @@ export async function GET(request: NextRequest) {
       supabaseServer.from("activity_logs").select("workout_minutes").eq("user_id", CURRENT_USER_ID).eq("recorded_at", today),
       supabaseServer.from("goals").select("*").eq("user_id", CURRENT_USER_ID).eq("status", "in_corso"),
       supabaseServer.from("journal_entries").select("content").eq("user_id", CURRENT_USER_ID).eq("entry_date", today).maybeSingle(),
+      // Integrazione col modulo Pensieri (PRD-addendum-negative-self-talk.md
+      // sezione 5): un fatto in più nel contesto, non un accoppiamento di
+      // schema — self_talk_entries resta una tabella indipendente da
+      // journal_entries, deliberatamente (vedi addendum sezione 9).
+      supabaseServer
+        .from("self_talk_entries")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", CURRENT_USER_ID)
+        .eq("guided_session_completed", false)
+        .gte("created_at", `${today}T00:00:00.000Z`),
     ]);
 
   const consumedKcal = (logsResult.data ?? []).reduce((sum, r) => sum + r.kcal, 0);
@@ -94,6 +112,7 @@ export async function GET(request: NextRequest) {
   const workoutMinutes = (activityResult.data ?? []).reduce((sum, r) => sum + (r.workout_minutes ?? 0), 0);
   const goalsWithProgress = await enrichGoalsWithProgress((goalsResult.data ?? []) as Tables<"goals">[]);
   const journalContent = journalResult.data?.content ?? null;
+  const unworkedThoughtsCount = unworkedThoughtsResult.count ?? 0;
 
   const summaryText = buildSummaryText({
     consumedKcal,
@@ -104,6 +123,7 @@ export async function GET(request: NextRequest) {
     workoutMinutes,
     goals: goalsWithProgress.map((g) => ({ title: g.title, progress_pct: g.progress_pct })),
     journalContent,
+    unworkedThoughtsCount,
   });
 
   const message = await generateEveningMessage(summaryText).catch(

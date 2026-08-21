@@ -618,6 +618,141 @@ export interface Database {
         };
         Relationships: [];
       };
+      self_talk_entries: {
+        Row: {
+          id: string;
+          user_id: string;
+          raw_text: string;
+          mood_before: number | null;
+          theme: "lavoro" | "corpo" | "relazioni" | "economico" | "altro" | null;
+          created_at: string;
+          guided_session_started: boolean;
+          guided_session_completed: boolean;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          raw_text: string;
+          mood_before?: number | null;
+          theme?: "lavoro" | "corpo" | "relazioni" | "economico" | "altro" | null;
+          created_at?: string;
+          guided_session_started?: boolean;
+          guided_session_completed?: boolean;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          raw_text?: string;
+          mood_before?: number | null;
+          theme?: "lavoro" | "corpo" | "relazioni" | "economico" | "altro" | null;
+          created_at?: string;
+          guided_session_started?: boolean;
+          guided_session_completed?: boolean;
+        };
+        Relationships: [];
+      };
+      distortion_tags: {
+        Row: {
+          id: string;
+          entry_id: string;
+          user_id: string;
+          distortion_type: string;
+          source: "user" | "llm";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          entry_id: string;
+          user_id: string;
+          distortion_type: string;
+          source: "user" | "llm";
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          entry_id?: string;
+          user_id?: string;
+          distortion_type?: string;
+          source?: "user" | "llm";
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      reframe_sessions: {
+        Row: {
+          id: string;
+          entry_id: string;
+          user_id: string;
+          evidence_for: string | null;
+          evidence_against: string | null;
+          consider_opposite: string;
+          reframe_text: string | null;
+          mood_after: number | null;
+          llm_transcript: Json | null;
+          created_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          entry_id: string;
+          user_id: string;
+          evidence_for?: string | null;
+          evidence_against?: string | null;
+          consider_opposite: string;
+          reframe_text?: string | null;
+          mood_after?: number | null;
+          llm_transcript?: Json | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          entry_id?: string;
+          user_id?: string;
+          evidence_for?: string | null;
+          evidence_against?: string | null;
+          consider_opposite?: string;
+          reframe_text?: string | null;
+          mood_after?: number | null;
+          llm_transcript?: Json | null;
+          created_at?: string;
+          completed_at?: string | null;
+        };
+        Relationships: [];
+      };
+      pattern_flags: {
+        Row: {
+          id: string;
+          user_id: string;
+          flag_type: "frequency_high" | "intensity_high" | "theme_concentration";
+          window_start: string;
+          window_end: string;
+          summary_text: string;
+          acknowledged: boolean;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          flag_type: "frequency_high" | "intensity_high" | "theme_concentration";
+          window_start: string;
+          window_end: string;
+          summary_text: string;
+          acknowledged?: boolean;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          flag_type?: "frequency_high" | "intensity_high" | "theme_concentration";
+          window_start?: string;
+          window_end?: string;
+          summary_text?: string;
+          acknowledged?: boolean;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {

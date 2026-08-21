@@ -343,6 +343,68 @@ create table if not exists public.journal_entries (
   unique (user_id, entry_date)
 );
 
+-- ------------------------------------------------------------
+-- 15. NEGATIVE SELF-TALK & COGNITIVE REFRAMING
+-- ------------------------------------------------------------
+-- Vedi PRD-addendum-negative-self-talk.md. Nessun rilevamento/
+-- messaggio di crisi né numeri di emergenza: scelta esplicita
+-- dell'utente, strumento di miglioramento personale, non di supporto
+-- in crisi — vedi nota in schema-migration-010.
+create table if not exists public.self_talk_entries (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  raw_text text not null,
+  mood_before smallint check (mood_before between 1 and 10),
+  theme text check (theme in ('lavoro', 'corpo', 'relazioni', 'economico', 'altro')),
+  created_at timestamptz not null default now(),
+  guided_session_started boolean not null default false,
+  guided_session_completed boolean not null default false
+);
+
+create index if not exists idx_self_talk_entries_user_date on public.self_talk_entries(user_id, created_at);
+
+create table if not exists public.distortion_tags (
+  id uuid primary key default gen_random_uuid(),
+  entry_id uuid not null references public.self_talk_entries(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  distortion_type text not null check (distortion_type in (
+    'ALL_OR_NOTHING', 'OVERGENERALIZATION', 'MENTAL_FILTER', 'DISCOUNTING_POSITIVE',
+    'JUMPING_TO_CONCLUSIONS', 'MAGNIFICATION', 'EMOTIONAL_REASONING',
+    'SHOULD_STATEMENTS', 'LABELING', 'PERSONALIZATION'
+  )),
+  source text not null check (source in ('user', 'llm')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_distortion_tags_entry on public.distortion_tags(entry_id);
+
+create table if not exists public.reframe_sessions (
+  id uuid primary key default gen_random_uuid(),
+  entry_id uuid not null unique references public.self_talk_entries(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  evidence_for text,
+  evidence_against text,
+  consider_opposite text not null,
+  reframe_text text,
+  mood_after smallint check (mood_after between 1 and 10),
+  llm_transcript jsonb,
+  created_at timestamptz not null default now(),
+  completed_at timestamptz
+);
+
+create table if not exists public.pattern_flags (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  flag_type text not null check (flag_type in ('frequency_high', 'intensity_high', 'theme_concentration')),
+  window_start date not null,
+  window_end date not null,
+  summary_text text not null,
+  acknowledged boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_pattern_flags_user on public.pattern_flags(user_id, created_at);
+
 -- ============================================================
 -- ROW LEVEL SECURITY
 -- ------------------------------------------------------------
@@ -366,6 +428,10 @@ alter table public.coach_nudges enable row level security;
 alter table public.coach_preferences enable row level security;
 alter table public.daily_focus enable row level security;
 alter table public.journal_entries enable row level security;
+alter table public.self_talk_entries enable row level security;
+alter table public.distortion_tags enable row level security;
+alter table public.reframe_sessions enable row level security;
+alter table public.pattern_flags enable row level security;
 
 create policy "foods_read_all" on public.foods for select using (true);
 create policy "foods_insert_all" on public.foods for insert with check (true);
@@ -384,6 +450,10 @@ create policy "coach_nudges_own" on public.coach_nudges for all using (auth.uid(
 create policy "coach_preferences_own" on public.coach_preferences for all using (auth.uid() = user_id);
 create policy "daily_focus_own" on public.daily_focus for all using (auth.uid() = user_id);
 create policy "journal_entries_own" on public.journal_entries for all using (auth.uid() = user_id);
+create policy "self_talk_entries_own" on public.self_talk_entries for all using (auth.uid() = user_id);
+create policy "distortion_tags_own" on public.distortion_tags for all using (auth.uid() = user_id);
+create policy "reframe_sessions_own" on public.reframe_sessions for all using (auth.uid() = user_id);
+create policy "pattern_flags_own" on public.pattern_flags for all using (auth.uid() = user_id);
 
 -- ------------------------------------------------------------
 -- Setup una tantum: crea l'unico utente fisso dell'app

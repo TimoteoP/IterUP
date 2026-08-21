@@ -15,6 +15,7 @@ export const NAV_LINKS: NavLink[] = [
   { href: "/diario", label: "Diario", icon: "🍽️" },
   { href: "/misure", label: "Misure", icon: "📏" },
   { href: "/abitudini", label: "Abitudini", icon: "✅" },
+  { href: "/pensieri", label: "Pensieri", icon: "💭" },
   { href: "/obiettivi", label: "Obiettivi", icon: "🎯" },
   { href: "/attivita", label: "Attività", icon: "🏃" },
   { href: "/impostazioni", label: "Impostazioni", icon: "⚙️" },

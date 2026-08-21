@@ -113,7 +113,7 @@ CLAUDE.md                     Regole operative per lavorare sul progetto con Cla
 | `body-indices.ts` | BMI e "Indice Corporeo IterUp" (indice composito peso+circonferenze) |
 | `composition.ts` | Formule della Bussola di Ricomposizione (BF% Navy, FM/FFM, bilancio energetico, Indice di Ricomposizione, logica di direzione) |
 | `body-metrics-store.ts` | Upsert "merge-aware" su `body_metrics`, condivisa tra modulo Misure e Bussola |
-| `openrouter.ts` | Client OpenRouter condiviso (fallback esplicito tra modelli, mai auto-router) |
+| `openrouter.ts` | Client OpenRouter condiviso (fallback esplicito tra modelli, mai auto-router). `callOpenRouterJSON` ritenta anche su fallimento della chiamata stessa, non solo su JSON malformato (vedi 1.12) |
 | `api-auth.ts` | `requireApiAuth(request)` — guardia token per ogni API route, vedi 1.2.1 |
 | `api-client.ts` | `apiFetch()` — wrapper client che allega il token, da usare al posto di `fetch()` nudo |
 | `streak.ts` | Calcolo streak (giorni consecutivi completati), condiviso tra dashboard e obiettivi |
@@ -123,6 +123,10 @@ CLAUDE.md                     Regole operative per lavorare sul progetto con Cla
 | `coach-messages.ts` | Coach comportamentale: prompt e chiamate OpenRouter per nudge/rituali mattina-sera |
 | `coach-engine.ts` | Coach comportamentale: switch on/off, cap di frequenza, ciclo di feedback 👍/👎 |
 | `coach-evaluators.ts` | Coach comportamentale: legge i dati reali e collega trigger + engine ai punti di scrittura |
+| `self-talk-taxonomy.ts` | Negative Self-Talk: tassonomia fissa (10 distorsioni, 5 theme), entrambe enum non estendibili |
+| `self-talk-patterns.ts` | Negative Self-Talk: rilevamento pattern, funzioni pure e testate (vedi 1.12) |
+| `self-talk-messages.ts` | Negative Self-Talk: classificazione automatica + proposta di reframe via OpenRouter |
+| `self-talk-engine.ts` | Negative Self-Talk: rivalutazione pattern con cooldown 24h (nessun cron, vedi 1.12) |
 
 I file marcati "contratto congelato" non vanno modificati senza motivo esplicito: sono la
 superficie di contatto tra i moduli (vedi `CLAUDE.md`).
@@ -152,6 +156,11 @@ eccezioni deliberate segnalate lì.
 | Coach | `GET/PATCH /api/coach/preferences` | Switch on/off e tono preferito per categoria di trigger |
 | Coach | `GET/POST /api/coach/daily-focus`, `GET/POST /api/coach/journal` | Le 3 priorità del giorno, "Note del giorno" |
 | Coach | `GET /api/coach/morning`, `GET /api/coach/evening` | Rituali per Shortcut iOS pianificato (mattina/sera) |
+| Pensieri | `GET/POST /api/self-talk/entries`, `GET/PATCH /api/self-talk/entries/[id]` | Cattura rapida + classificazione LLM best-effort (theme, 0-2 distorsioni) |
+| Pensieri | `POST /api/self-talk/entries/[id]/tags` | L'utente conferma/aggiunge una distorsione (`source='user'`) |
+| Pensieri | `POST /api/self-talk/entries/[id]/reframe/propose`, `POST /api/self-talk/entries/[id]/reframe` | Proposta LLM di reframe (non persistita) → salvataggio definitivo del thought record |
+| Pensieri | `GET /api/self-talk/patterns`, `POST /api/self-talk/patterns/[id]/acknowledge` | Pattern rilevati (regole esplicite, non LLM) + acknowledge |
+| Pensieri | `GET /api/self-talk/dashboard` | Distribuzione distorsioni/theme, trend umore, divergenza utente↔AI |
 
 ## 1.6 Schema database
 
@@ -175,6 +184,10 @@ che è applicato sul DB live in questo istante: vedi 1.7). Tabelle:
 | `coach_preferences` | Switch on/off, tono preferito e tasso di gradimento per categoria di trigger |
 | `daily_focus` | Le 3 priorità della giornata (rituale mattutino del coach) |
 | `journal_entries` | "Note del giorno" — testo libero letto (non interpretato) dal rituale serale del coach |
+| `self_talk_entries` | Pensieri negativi catturati (testo, umore prima, theme, stato sessione) |
+| `distortion_tags` | Distorsioni cognitive taggate su un'entry, `source` `user`\|`llm` |
+| `reframe_sessions` | Thought record completo (evidenze, "consider the opposite", reframe, umore dopo) |
+| `pattern_flags` | Pattern ricorrenti rilevati da regole esplicite (frequenza/intensità/concentrazione tema) |
 
 Dettagli importanti che si discostano da un modello "naive":
 
@@ -198,6 +211,13 @@ Dettagli importanti che si discostano da un modello "naive":
 - **Ricerca alimenti a 3 livelli**: full-text → `ilike` → estensione `pg_trgm` (tolleranza
   ai typo) via una funzione RPC dedicata (`search_foods_trgm`, PostgREST non permette di
   ordinare per `similarity()` direttamente dal query builder).
+- **`pattern_flags.flag_type`** copre solo `frequency_high`/`intensity_high`/
+  `theme_concentration`. L'addendum originale del modulo Pensieri includeva anche un
+  quarto tipo, `crisis_language` (rilevamento di linguaggio di crisi con messaggio fisso e
+  numeri di emergenza), scartato su richiesta esplicita dell'utente prima
+  dell'implementazione: IterUp resta uno strumento di miglioramento personale, non uno
+  strumento di supporto in crisi — vedi il commento in testa a
+  `schema-migration-010-negative-self-talk.sql`.
 
 ## 1.7 Migrazioni: come sincronizzare lo schema
 
@@ -221,6 +241,7 @@ cambia. Riepilogo di cosa introduce ciascuna migrazione:
 | `007-supplement-chat` | Tabella `supplement_chat_messages` |
 | `008-coach` | Tabelle `coach_nudges`, `coach_preferences`, `daily_focus`, `journal_entries` |
 | `009-custom-macro-split` | Campo `profiles.custom_macro_split`, split macro personalizzato per regimi custom |
+| `010-negative-self-talk` | Tabelle `self_talk_entries`, `distortion_tags`, `reframe_sessions`, `pattern_flags` |
 
 ## 1.8 Documenti di riferimento
 
@@ -233,6 +254,7 @@ cambia. Riepilogo di cosa introduce ciascuna migrazione:
   tollerante ai typo, obiettivi collegati ai dati, export, vista cronologica, chat
   integratori, promemoria
 - `PRD-addendum-coach-comportamentale.md` — motore di nudge, rituali mattina/sera
+- `PRD-addendum-negative-self-talk.md` — modulo Pensieri (cognitive reframing CBT)
 
 ## 1.9 Variabili d'ambiente (`.env.local`, mai committato)
 
@@ -295,6 +317,66 @@ obiettivi/abitudini, un'abitudine da ricordare). La sera riassume la giornata e 
 con un tono calmo, mai una checklist di correzioni; se le "Note del giorno"
 (`journal_entries`) contengono segnali di disagio, il modello stesso resta più sobrio
 senza interpretarli — non c'è una fase di rilevamento separata nel codice.
+
+## 1.12 Negative Self-Talk & Cognitive Reframing ("Pensieri")
+
+Vedi `PRD-addendum-negative-self-talk.md`. Cattura rapida di un pensiero negativo + un
+thought record guidato in stile CBT (cognitive restructuring, Beck/Burns), con tassonomia
+fissa a 10 distorsioni cognitive e 5 theme (nessuno dei due estendibile, per non rompere
+la dashboard analitica nel tempo — scelta esplicita dell'utente anche per `theme`).
+
+**Nessun rilevamento/messaggio di crisi.** L'addendum originale includeva un flag
+`crisis_language` (linguaggio di ideazione/disperazione acuta → messaggio fisso con
+risorse di emergenza). È stato **scartato su richiesta esplicita dell'utente** prima
+dell'implementazione: IterUp resta uno strumento di miglioramento personale per un
+singolo utente, non uno strumento di supporto in crisi — nessun numero di emergenza in
+nessuna parte dell'app. `pattern_flags` copre solo tre tipi (sezione 1.6), usati per
+indicazioni e consigli, non per allarmi.
+
+**Flusso**: cattura rapida (`POST /api/self-talk/entries`) → classificazione LLM
+best-effort (theme se non specificato + 0-2 distorsioni più probabili, mai bloccante sul
+salvataggio) → offerta non invasiva "lavoraci ora o solo registra" → se accettata, un
+thought record: evidenza a favore, evidenza contro, **"consider the opposite"**
+(obbligatorio, contromisura al confirmation bias — l'unico step non saltabile) → proposta
+di reframe via LLM (sempre editabile, mai imposta come "la verità") → umore dopo
+(opzionale). Implementato come form unico scorrevole, non uno stepper a passi bloccanti —
+stesso contenuto CBT dell'addendum, scelta pragmatica più semplice da mantenere.
+
+**Pattern rilevati da regole esplicite** (`lib/self-talk-patterns.ts`, non dall'LLM, per
+evitare over-alarming o minimizzazione dovuta a variabilità del prompt): frequenza alta
+(8+ pensieri sullo stesso tema in 7 giorni), intensità alta (umore medio ≤3 su 5+ pensieri
+in 14 giorni), concentrazione tematica (60%+ dei pensieri di 30 giorni su un solo tema,
+minimo 5 pensieri). Rivalutati con un cooldown di 24h quando l'utente apre la pagina
+Pattern (`lib/self-talk-engine.ts`) — nessuna infrastruttura di cron, stesso compromesso
+già adottato dal Coach per "obiettivo in ritardo".
+
+**Integrazione col rituale serale del Coach**: se ci sono pensieri di oggi non ancora
+lavorati, `GET /api/coach/evening` lo include nel contesto e può chiudere con un invito
+gentile e non obbligatorio — un fatto in più nel prompt, non un accoppiamento di schema
+(`self_talk_entries` resta indipendente da `journal_entries`, deliberatamente).
+
+**Accesso rapido**: voce "Pensieri" 💭 nella navigazione principale, più una scorciatoia
+PWA (`public/manifest.json`, long-press sull'icona dell'app) che porta dritto alla cattura
+rapida — è il requisito UX più critico secondo l'addendum, "sempre a un tap di distanza".
+
+**Verificato dal vivo** (creazione entry, classificazione LLM, tag manuale, proposta e
+salvataggio del reframe — con modifica successiva —, rilevamento pattern su dati seminati
+apposta, poi tutto ripulito dal DB reale) prima di essere integrato. Il testing ha trovato
+e corretto due bug reali, non specifici solo a questo modulo:
+
+- Il reframe di un thought record completato era bloccato in sola lettura, in contrasto
+  col guardrail "mai imposto come la verità corretta" — ora è sempre modificabile
+  (pulsante "Modifica" nella vista completata).
+- `callOpenRouterJSON` (`lib/openrouter.ts`) non ritentava se la chiamata stessa falliva
+  (solo su JSON malformato) — corretto perché un modello della catena
+  (`deepseek-v4-flash-0731`) fallisce in modo riproducibile in `json_object` mode quando
+  il prompt è **solo system, senza alcun messaggio user** (risposta vuota, verificato in
+  isolamento contro l'API OpenRouter). Regola pratica per prompt JSON futuri in questo
+  progetto: dividere sempre in system (vincoli/contesto) + user (il compito specifico),
+  mai un unico blocco system — applicato qui e in `lib/coach-messages.ts`
+  (`generateNudgeMessage`). `app/api/suggest-meal/route.ts` ha la stessa forma a rischio
+  ma non è stato toccato: è un file di decisioni di prodotto congelate, da correggere solo
+  con autorizzazione esplicita.
 
 ---
 
@@ -439,7 +521,32 @@ promemoria su un'abitudine al mattino, un riepilogo calmo della giornata alla se
 Richiedono la stessa chiave segreta usata per proteggere le altre funzioni dell'app
 (configurata una volta sola nello Shortcut).
 
-## 2.10 Impostazioni
+## 2.10 Pensieri
+
+Quando ti accorgi di un pensiero negativo su di te — al lavoro, sul corpo, in una
+relazione, sui soldi — scrivilo nella sezione **Pensieri**, a un tap di distanza dal menu
+(e anche dall'icona dell'app, se la tieni sulla home). Bastano 15 secondi: testo libero,
+umore opzionale, salva.
+
+Subito dopo puoi scegliere se **lavorarci sopra ora** (2 minuti) o **solo registrarlo** —
+nessuna delle due è la scelta "giusta", dipende dal momento. Se scegli di lavorarci,
+l'app ti guida attraverso qualche domanda in stile CBT: che prova hai a favore di questo
+pensiero, che prova hai contro, e soprattutto — *se stessi cercando solo conferme, cosa
+staresti ignorando?* Alla fine puoi farti proporre un riformulazione più equilibrata, che
+resta sempre tua da modificare quanto vuoi: non è "la versione corretta", è solo un punto
+di partenza.
+
+Nella tab **Analisi** trovi come cambia il tuo umore prima/dopo aver lavorato un pensiero,
+quali distorsioni ricorrono di più, su quali temi ti soffermi, e — con il tempo — quanto
+la tua auto-percezione coincide con quella suggerita dall'AI. Se un pattern diventa
+ricorrente (es. molti pensieri sullo stesso tema in pochi giorni), l'app te lo segnala con
+un messaggio semplice, senza etichette né allarmismi: è un'indicazione, non un giudizio.
+
+Questo modulo non è pensato per momenti di crisi reale, solo per il lavoro quotidiano sui
+pensieri negativi comuni — non contiene numeri di emergenza o messaggi specifici per
+situazioni gravi.
+
+## 2.11 Impostazioni
 
 Oltre a modificare il tuo profilo in qualsiasi momento, questa è anche la sezione dove:
 
@@ -450,11 +557,14 @@ Oltre a modificare il tuo profilo in qualsiasi momento, questa è anche la sezio
 - attivi o disattivi i singoli tipi di messaggio del **coach comportamentale**;
 - scarichi un **backup completo** di tutti i tuoi dati in un file JSON.
 
-## 2.11 Cosa NON fa (per ora)
+## 2.12 Cosa NON fa (per ora)
 
 - Non genera automaticamente un piano dietetico per integratori (solo il diario pasti ha
   il generatore AI, per ora).
 - Non è uno strumento clinico: il coach comportamentale non interpreta, non etichetta e
   non fa diagnosi su ciò che scrivi nelle note personali — se percepisce un tono più
   serio si limita a essere più sobrio quella sera, nient'altro.
+- Non è uno strumento di supporto in crisi: la sezione Pensieri non rileva né risponde a
+  situazioni di crisi reale, e non contiene numeri di emergenza — è pensata solo per il
+  lavoro quotidiano sui pensieri negativi comuni.
 - Non supporta più utenti: è pensata per un solo profilo.
